@@ -42,7 +42,7 @@ public class ContactMessage implements Serializable {
     @Column(name = "created_at")
     private Instant createdAt;
 
-    @Column(name = "status")
+    @Column(name = "status", length = 20)
     @Enumerated(EnumType.STRING)
     private ContactStatus status; // NEW, IN_PROGRESS, CLOSED
 

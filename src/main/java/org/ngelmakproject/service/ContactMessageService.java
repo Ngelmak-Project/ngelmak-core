@@ -18,60 +18,60 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class ContactMessageService {
 
-    private static final String ENTITY_NAME = "comment";
+    private static final String ENTITY_NAME = "contactMessage";
     private static final Logger log = LoggerFactory.getLogger(ContactMessageService.class);
 
-    private final ContactMessageRepository membershipRepository;
+    private final ContactMessageRepository contactMessageRepository;
 
-    public ContactMessageService(ContactMessageRepository membershipRepository) {
-        this.membershipRepository = membershipRepository;
+    public ContactMessageService(ContactMessageRepository contactMessageRepository) {
+        this.contactMessageRepository = contactMessageRepository;
     }
 
     /**
-     * Save a membership.
+     * Save a contactMessage.
      *
-     * @param membership the entity to save.
+     * @param contactMessage the entity to save.
      * @return the persisted entity.
      */
-    public ContactMessage save(ContactMessage membership) {
-        log.debug("Request to save ContactMessage : {}", membership);
-        return membershipRepository.save(membership);
+    public ContactMessage save(ContactMessage contactMessage) {
+        log.debug("Request to save ContactMessage : {}", contactMessage);
+        return contactMessageRepository.save(contactMessage);
     }
 
     /**
-     * Update a membership.
+     * Update a contactMessage.
      *
-     * @param membership the entity to save.
+     * @param contactMessage the entity to save.
      * @return the persisted entity.
      */
-    public ContactMessage update(ContactMessage membership) {
-        log.debug("Request to update ContactMessage : {}", membership);
-        return membershipRepository
-                .findById(membership.getId())
+    public ContactMessage update(ContactMessage contactMessage) {
+        log.debug("Request to update ContactMessage : {}", contactMessage);
+        return contactMessageRepository
+                .findById(contactMessage.getId())
                 .map(existingContactMessage -> {
-                    if (membership.getEmail() != null) {
-                        existingContactMessage.setEmail(membership.getEmail());
+                    if (contactMessage.getEmail() != null) {
+                        existingContactMessage.setEmail(contactMessage.getEmail());
                     }
-                    if (membership.getSubject() != null) {
-                        existingContactMessage.setSubject(membership.getSubject());
+                    if (contactMessage.getSubject() != null) {
+                        existingContactMessage.setSubject(contactMessage.getSubject());
                     }
-                    if (membership.getMessage() != null) {
-                        existingContactMessage.setMessage(membership.getMessage());
+                    if (contactMessage.getMessage() != null) {
+                        existingContactMessage.setMessage(contactMessage.getMessage());
                     }
-                    if (membership.getMessage() != null) {
-                        existingContactMessage.setMessage(membership.getMessage());
+                    if (contactMessage.getMessage() != null) {
+                        existingContactMessage.setMessage(contactMessage.getMessage());
                     }
-                    if (membership.getStatus() != null) {
-                        existingContactMessage.setStatus(membership.getStatus());
+                    if (contactMessage.getStatus() != null) {
+                        existingContactMessage.setStatus(contactMessage.getStatus());
                     }
                     return existingContactMessage;
                 })
-                .map(membershipRepository::save)
+                .map(contactMessageRepository::save)
                 .orElseThrow(() -> new ResourceNotFoundException("Entity not found", ENTITY_NAME, "idnotfound"));
     }
 
     /**
-     * Get all the memberships.
+     * Get all the contactMessages.
      *
      * @param pageable the pagination information.
      * @return the list of entities.
@@ -79,17 +79,17 @@ public class ContactMessageService {
     @Transactional(readOnly = true)
     public PageDTO<ContactMessage> findAllUntreatedContactMessage(Pageable pageable) {
         log.debug("Request to get all ContactMessages");
-        var page = membershipRepository.findUnclosedContactMessageOrderByCreatedAt(pageable);
+        var page = contactMessageRepository.findUnclosedContactMessageOrderByCreatedAt(pageable);
         return PageDTO.from(page);
     }
 
     /**
-     * Delete the membership by id.
+     * Delete the contactMessage by id.
      *
      * @param id the id of the entity.
      */
     public void delete(Long id) {
         log.debug("Request to delete ContactMessage : {}", id);
-        membershipRepository.deleteById(id);
+        contactMessageRepository.deleteById(id);
     }
 }

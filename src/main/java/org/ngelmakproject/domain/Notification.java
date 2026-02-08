@@ -42,7 +42,7 @@ public class Notification implements Serializable {
 
     @NonNull
     @Enumerated(EnumType.STRING)
-    @Column(name = "notification_type")
+    @Column(name = "notification_type", length = 50)
     private NotificationType type;
 
     // When the notification becomes visible
@@ -51,8 +51,8 @@ public class Notification implements Serializable {
     private Instant scheduledAt;
 
     // How long it stays active (in hours)
-    @Column(name = "expires_after_hours")
-    private Short expiresAfterHours;
+    @Column(name = "expires_at")
+    private Instant expiresAt;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JsonIncludeProperties(value = { "id", "url" })
@@ -90,12 +90,12 @@ public class Notification implements Serializable {
         this.scheduledAt = scheduledAt;
     }
 
-    public Short getExpiresAt() {
-        return expiresAfterHours;
+    public Instant getExpiresAt() {
+        return expiresAt;
     }
 
-    public void setExpiresAt(Short expiresAfterHours) {
-        this.expiresAfterHours = expiresAfterHours;
+    public void setExpiresAt(Instant expiresAt) {
+        this.expiresAt = expiresAt;
     }
 
     public File getFile() {
