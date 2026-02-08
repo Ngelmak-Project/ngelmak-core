@@ -6,6 +6,7 @@ import java.time.Instant;
 import org.ngelmakproject.domain.enumeration.Accessibility;
 import org.ngelmakproject.domain.enumeration.Visibility;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import jakarta.persistence.Column;
@@ -48,7 +49,8 @@ public class Config implements Serializable {
 
     @JsonIgnore
     @OneToOne(mappedBy = "configuration")
-    private Account nkAccount;
+    @JsonBackReference
+    private Account account;
 
     public Long getId() {
         return this.id;
@@ -103,21 +105,21 @@ public class Config implements Serializable {
     }
 
     public Account getAccount() {
-        return this.nkAccount;
+        return this.account;
     }
 
-    public void setAccount(Account nkAccount) {
-        if (this.nkAccount != null) {
-            this.nkAccount.setConfiguration(null);
+    public void setAccount(Account account) {
+        if (this.account != null) {
+            this.account.setConfiguration(null);
         }
-        if (nkAccount != null) {
-            nkAccount.setConfiguration(this);
+        if (account != null) {
+            account.setConfiguration(this);
         }
-        this.nkAccount = nkAccount;
+        this.account = account;
     }
 
-    public Config nkAccount(Account nkAccount) {
-        this.setAccount(nkAccount);
+    public Config account(Account account) {
+        this.setAccount(account);
         return this;
     }
 

@@ -38,7 +38,6 @@ public class SecurityConfig {
 
                         // Open access to other read/metadata operations
                         .anyRequest().permitAll())
-
                 .addFilterBefore(gatewayAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
