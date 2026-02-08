@@ -26,10 +26,19 @@ public class SecurityConfig {
                 .cors(cors -> cors.disable()) // Disable Spring Security CORS so Gateway handles it
                 .csrf(csrf -> csrf.disable()) // Disable CSRF protection (not needed for token-based APIs)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.POST, "/**").authenticated().requestMatchers(HttpMethod.PUT, "/**")
-                        .authenticated().requestMatchers(HttpMethod.DELETE, "/**").authenticated().anyRequest()
-                        .permitAll() // GET, OPTIONS, HEAD remain open
-                )
+                        // Public contact message submission
+                        .requestMatchers(HttpMethod.POST, "/api/contact-messages").permitAll()
+                        // Authenticated contact message retrieval
+                        .requestMatchers(HttpMethod.GET, "/api/contact-messages").authenticated()
+
+                        // Require authentication for most write operations
+                        .requestMatchers(HttpMethod.POST, "/**").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/**").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/**").authenticated()
+
+                        // Open access to other read/metadata operations
+                        .anyRequest().permitAll())
+
                 .addFilterBefore(gatewayAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }

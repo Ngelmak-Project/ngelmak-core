@@ -50,7 +50,8 @@ public class ContactMessageResource {
      *
      * @param contantMessage the contantMessage to create.
      * @return the {@link ResponseEntity} with status {@code 201 (Created)} and with
-     *         body the new contantMessage, or with status {@code 400 (Bad Request)} if
+     *         body the new contantMessage, or with status {@code 400 (Bad Request)}
+     *         if
      *         the contantMessage has already an ID.
      * @throws URISyntaxException if the Location URI syntax is incorrect.
      */
@@ -59,7 +60,8 @@ public class ContactMessageResource {
             throws URISyntaxException {
         log.debug("REST request to save ContactMessage : {}", contantMessage);
         if (contantMessage.getId() != null) {
-            throw new BadRequestAlertException("A new contantMessage cannot already have an ID", ENTITY_NAME, "idexists");
+            throw new BadRequestAlertException("A new contantMessage cannot already have an ID", ENTITY_NAME,
+                    "idexists");
         }
         contantMessage = contantMessageService.save(contantMessage);
         return ResponseEntity.created(new URI("/api/contact-messages/" + contantMessage.getId()))
@@ -71,13 +73,14 @@ public class ContactMessageResource {
     /**
      * {@code PUT  /contact-messages/:id} : Updates an existing contantMessage.
      *
-     * @param id         the id of the contantMessage to save.
+     * @param id             the id of the contantMessage to save.
      * @param contantMessage the contantMessage to update.
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body
      *         the updated contantMessage,
      *         or with status {@code 400 (Bad Request)} if the contantMessage is not
      *         valid,
-     *         or with status {@code 500 (Internal Server Error)} if the contantMessage
+     *         or with status {@code 500 (Internal Server Error)} if the
+     *         contantMessage
      *         couldn't be updated.
      * @throws URISyntaxException if the Location URI syntax is incorrect.
      */
@@ -91,7 +94,8 @@ public class ContactMessageResource {
         contantMessage = contantMessageService.update(contantMessage);
         return ResponseEntity.ok()
                 .headers(
-                        HeaderUtil.createEntityUpdateAlert(applicationName, ENTITY_NAME, contantMessage.getId().toString()))
+                        HeaderUtil.createEntityUpdateAlert(applicationName, ENTITY_NAME,
+                                contantMessage.getId().toString()))
                 .body(contantMessage);
     }
 
