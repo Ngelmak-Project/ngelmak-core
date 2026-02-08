@@ -116,11 +116,10 @@ public class ContactMessageResource {
      * @return the {@link ResponseEntity} with status {@code 204 (NO_CONTENT)}.
      */
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteContactMessage(@PathVariable("id") Long id) {
+    public ResponseEntity<Void> deleteContactMessage(@PathVariable Long id) {
         log.debug("REST request to delete ContactMessage : {}", id);
         contantMessageService.delete(id);
         return ResponseEntity.noContent()
-                .headers(HeaderUtil.createEntityDeletionAlert(applicationName, ENTITY_NAME, id.toString()))
                 .build();
     }
 }

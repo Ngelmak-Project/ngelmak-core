@@ -33,7 +33,7 @@ public class ContactMessage implements Serializable {
     @Column(name = "email")
     private String email; // optional if user is logged in
 
-    @Column(name = "subject")
+    @Column(name = "subject", length = 255)
     private String subject;
 
     @Column(name = "message", length = 1000, nullable = false)
