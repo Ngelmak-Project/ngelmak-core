@@ -8,7 +8,6 @@ import java.util.Set;
 import org.ngelmakproject.domain.enumeration.Accessibility;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonManagedReference;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -91,7 +90,6 @@ public class Account implements Serializable {
      */
     @OneToOne(fetch = FetchType.LAZY, optional = true)
     @JoinColumn(unique = true)
-    @JsonManagedReference
     private Config configuration;
 
     /**
