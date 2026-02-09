@@ -13,10 +13,7 @@ import org.springframework.stereotype.Repository;
 @SuppressWarnings("unused")
 @Repository
 public interface ChannelRepository extends JpaRepository<Channel, Long> {
-
-    @EntityGraph(attributePaths = { "configuration" })
     Optional<Channel> findOneByUser(Long id);
 
     Boolean existsByIdentifier(String identifier);
-
 }
