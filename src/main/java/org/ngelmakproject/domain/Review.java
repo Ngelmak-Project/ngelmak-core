@@ -56,22 +56,22 @@ public class Review implements Serializable {
     private Integer timeout;
 
     @OneToMany(fetch = FetchType.LAZY, mappedBy = "replyto")
-    @JsonIgnoreProperties(value = { "reviews", "account", "ticket", "replyto" }, allowSetters = true)
+    @JsonIgnoreProperties(value = { "reviews", "channel", "ticket", "replyto" }, allowSetters = true)
     private Set<Review> reviews = new HashSet<>();
 
     @ManyToOne(optional = false)
     @NotNull
     @JsonIgnoreProperties(value = { "configuration", "user", "reports", "owners", "comments", "memberships",
             "subscriptions", "posts", "reviews" }, allowSetters = true)
-    private Account account;
+    private Channel channel;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JsonIgnoreProperties(value = { "reviews", "postRelated", "commentRelated", "accountRelated",
+    @JsonIgnoreProperties(value = { "reviews", "postRelated", "commentRelated", "channelRelated",
             "issuedby" }, allowSetters = true)
     private Ticket ticket;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JsonIgnoreProperties(value = { "reviews", "account", "ticket", "replyto" }, allowSetters = true)
+    @JsonIgnoreProperties(value = { "reviews", "channel", "ticket", "replyto" }, allowSetters = true)
     private Review replyto;
 
     public Long getId() {
@@ -157,16 +157,16 @@ public class Review implements Serializable {
         return this;
     }
 
-    public Account getAccount() {
-        return this.account;
+    public Channel getChannel() {
+        return this.channel;
     }
 
-    public void setAccount(Account nkAccount) {
-        this.account = nkAccount;
+    public void setChannel(Channel nkChannel) {
+        this.channel = nkChannel;
     }
 
-    public Review account(Account nkAccount) {
-        this.setAccount(nkAccount);
+    public Review channel(Channel nkChannel) {
+        this.setChannel(nkChannel);
         return this;
     }
 

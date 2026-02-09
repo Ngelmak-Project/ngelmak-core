@@ -41,13 +41,13 @@ public class Membership implements Serializable {
     @NotNull
     @JsonIgnoreProperties(value = { "configuration", "user", "reports", "owners", "comments", "memberships",
             "subscriptions", "posts", "reviews" }, allowSetters = true)
-    private Account following;
+    private Channel following;
 
     @ManyToOne(optional = false)
     @NotNull
     @JsonIgnoreProperties(value = { "configuration", "user", "reports", "owners", "comments", "memberships",
             "subscriptions", "posts", "reviews" }, allowSetters = true)
-    private Account follower; // The owner of the membership
+    private Channel follower; // The owner of the membership
 
     public Long getId() {
         return this.id;
@@ -88,29 +88,29 @@ public class Membership implements Serializable {
         this.activateNotification = activateNotification;
     }
 
-    public Account getFollower() {
+    public Channel getFollower() {
         return this.follower;
     }
 
-    public void setFollower(Account nkAccount) {
-        this.follower = nkAccount;
+    public void setFollower(Channel nkChannel) {
+        this.follower = nkChannel;
     }
 
-    public Membership follower(Account nkAccount) {
-        this.setFollower(nkAccount);
+    public Membership follower(Channel nkChannel) {
+        this.setFollower(nkChannel);
         return this;
     }
 
-    public Account getFollowing() {
+    public Channel getFollowing() {
         return this.following;
     }
 
-    public void setFollowing(Account nkAccount) {
-        this.following = nkAccount;
+    public void setFollowing(Channel nkChannel) {
+        this.following = nkChannel;
     }
 
-    public Membership following(Account nkAccount) {
-        this.setFollowing(nkAccount);
+    public Membership following(Channel nkChannel) {
+        this.setFollowing(nkChannel);
         return this;
     }
 

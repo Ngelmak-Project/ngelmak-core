@@ -26,7 +26,7 @@ import org.springframework.stereotype.Repository;
 public interface CommentRepository extends JpaRepository<Comment, Long> {
 	// @Query("""
 	// SELECT c FROM Comment c
-	// LEFT JOIN FETCH c.account
+	// LEFT JOIN FETCH c.channel
 	// LEFT JOIN FETCH c.file
 	// WHERE c.post.id = :id
 	// AND c.deletedAt IS NULL
@@ -46,7 +46,7 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 	// c.url,
 	// c.post,
 	// c.replayto,
-	// c.account
+	// c.channel
 	// )
 	// from Comment c
 	// where c.id = :id
@@ -77,7 +77,7 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 	@Query("""
 			SELECT c FROM Comment c
 			LEFT JOIN FETCH c.post
-			LEFT JOIN FETCH c.account
+			LEFT JOIN FETCH c.channel
 			LEFT JOIN FETCH c.file
 			WHERE c.post.id = :postId AND c.replyTo IS NULL AND c.deletedAt IS NULL
 			ORDER BY c.at DESC
@@ -87,16 +87,16 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 	@Query("""
 			SELECT c FROM Comment c
 			LEFT JOIN FETCH c.post
-			LEFT JOIN FETCH c.account
+			LEFT JOIN FETCH c.channel
 			LEFT JOIN FETCH c.file
-			WHERE c.account.id = :accountId AND c.deletedAt IS NULL
+			WHERE c.channel.id = :channelId AND c.deletedAt IS NULL
 			ORDER BY c.at DESC
 			""")
-	Slice<Comment> findCommentsByAccountOrByAtDesc(@Param("accountId") Long accountId, Pageable pageable);
+	Slice<Comment> findCommentsByChannelOrByAtDesc(@Param("channelId") Long channelId, Pageable pageable);
 
 	@Query("""
 			SELECT c FROM Comment c
-			LEFT JOIN FETCH c.account
+			LEFT JOIN FETCH c.channel
 			LEFT JOIN FETCH c.file
 			WHERE c.replyTo.id = :commentId AND c.deletedAt IS NULL
 			ORDER BY c.at ASC
@@ -135,9 +135,9 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 	@Query("""
 			    UPDATE Comment c
 			    SET c.deletedAt = :ts
-			    WHERE c.id = :id AND c.account.id = :accountId
+			    WHERE c.id = :id AND c.channel.id = :channelId
 			""")
-	int softDeleteByIdAndAccount(@Param("id") Long id, @Param("accountId") Long accountId, @Param("ts") Instant ts);
+	int softDeleteByIdAndChannel(@Param("id") Long id, @Param("channelId") Long channelId, @Param("ts") Instant ts);
 
 	@Modifying
 	@Query("DELETE FROM Comment c WHERE c.deletedAt < :cutoff")

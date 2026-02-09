@@ -67,27 +67,27 @@ public class Ticket implements Serializable {
      * a review is either related to a ticket or is a reply to another review.
      */
     @OneToMany(fetch = FetchType.LAZY, mappedBy = "ticket")
-    @JsonIgnoreProperties(value = { "reviews", "account", "ticket", "replyto" }, allowSetters = true)
+    @JsonIgnoreProperties(value = { "reviews", "channel", "ticket", "replyto" }, allowSetters = true)
     private Set<Review> reviews = new HashSet<>();
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JsonIgnoreProperties(value = { "attachments", "reports", "comments", "account" }, allowSetters = true)
+    @JsonIgnoreProperties(value = { "attachments", "reports", "comments", "channel" }, allowSetters = true)
     private Post postRelated;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JsonIgnoreProperties(value = { "reports", "comments", "post", "replayto", "account" }, allowSetters = true)
+    @JsonIgnoreProperties(value = { "reports", "comments", "post", "replayto", "channel" }, allowSetters = true)
     private Comment commentRelated;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JsonIgnoreProperties(value = { "configuration", "user", "reports", "owners", "comments", "memberships",
             "subscriptions", "posts", "reviews" }, allowSetters = true)
-    private Account accountRelated;
+    private Channel channelRelated;
 
     @ManyToOne(optional = false)
     @NotNull
     @JsonIgnoreProperties(value = { "configuration", "user", "reports", "owners", "comments", "memberships",
             "subscriptions", "posts", "reviews" }, allowSetters = true)
-    private Account issuedby;
+    private Channel issuedby;
 
     public Long getId() {
         return this.id;
@@ -224,29 +224,29 @@ public class Ticket implements Serializable {
         return this;
     }
 
-    public Account getAccountRelated() {
-        return this.accountRelated;
+    public Channel getChannelRelated() {
+        return this.channelRelated;
     }
 
-    public void setAccountRelated(Account nkAccount) {
-        this.accountRelated = nkAccount;
+    public void setChannelRelated(Channel nkChannel) {
+        this.channelRelated = nkChannel;
     }
 
-    public Ticket accountRelated(Account nkAccount) {
-        this.setAccountRelated(nkAccount);
+    public Ticket channelRelated(Channel nkChannel) {
+        this.setChannelRelated(nkChannel);
         return this;
     }
 
-    public Account getIssuedby() {
+    public Channel getIssuedby() {
         return this.issuedby;
     }
 
-    public void setIssuedby(Account nkAccount) {
-        this.issuedby = nkAccount;
+    public void setIssuedby(Channel nkChannel) {
+        this.issuedby = nkChannel;
     }
 
-    public Ticket issuedby(Account nkAccount) {
-        this.setIssuedby(nkAccount);
+    public Ticket issuedby(Channel nkChannel) {
+        this.setIssuedby(nkChannel);
         return this;
     }
 

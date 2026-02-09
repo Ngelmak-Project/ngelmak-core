@@ -2,7 +2,7 @@ package org.ngelmakproject.repository;
 
 import java.util.Optional;
 
-import org.ngelmakproject.domain.Account;
+import org.ngelmakproject.domain.Channel;
 import org.ngelmakproject.domain.Post;
 import org.ngelmakproject.domain.enumeration.Status;
 import org.springframework.data.domain.Pageable;
@@ -25,7 +25,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     // " p.id AS post_reference_id, " +
     // " p.title AS post_reference_title, " +
     // " p.content AS post_reference_content, " +
-    // " a.name AS account_name " +
+    // " a.name AS channel_name " +
     // "FROM ( " +
     // " SELECT p.* FROM ( " +
     // " SELECT *, ts_rank_cd(textsearchable_index_col, query) AS rank " +
@@ -36,20 +36,20 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     // +
     // " FROM nk_post, to_tsquery('french', :fullText) query " +
     // " WHERE textsearchable_index_col @@ query) AS a " +
-    // " ON p.account_id = a.id " +
+    // " ON p.channel_id = a.id " +
     // " ORDER BY a.rank,p.rank DESC " +
     // " LIMIT :limit " +
     // " OFFSET :offset " +
     // ") AS full_search " +
     // "LEFT JOIN nk_post AS p ON full_search.post_reference_id = p.id " +
-    // "LEFT JOIN nk_account AS a ON a.id = p.account_id", nativeQuery = true)
+    // "LEFT JOIN nk_channel AS a ON a.id = p.channel_id", nativeQuery = true)
     // List<Tuple> fullTextSearch(@Param("fullText") String fullText,
     // @Param("limit") Integer limit,
     // @Param("offset") Long offset);
     // JOIN FETCH post.comments comments JOIN FETCH post.attachments attachments
 
     // @Query("SELECT post FROM Post post " +
-    // "LEFT JOIN FETCH post.account account " +
+    // "LEFT JOIN FETCH post.channel channel " +
     // "LEFT JOIN FETCH post.postReply postReply " +
     // "LEFT JOIN FETCH post.comments comments " +
     // "LEFT JOIN FETCH post.attachments attachments " +
@@ -59,36 +59,36 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     @Query("""
             SELECT p FROM Post p
             LEFT JOIN FETCH p.postReply
-            LEFT JOIN FETCH p.account
+            LEFT JOIN FETCH p.channel
             LEFT JOIN FETCH p.files
-            WHERE p.account.id = :accountId
+            WHERE p.channel.id = :channelId
             """)
-    Slice<Post> findByAccount(@Param("accountId") Long accountId,
+    Slice<Post> findByChannel(@Param("channelId") Long channelId,
             Pageable pageable);
 
     @Query("""
             SELECT p FROM Post p
             LEFT JOIN FETCH p.postReply
-            LEFT JOIN FETCH p.account
+            LEFT JOIN FETCH p.channel
             LEFT JOIN FETCH p.files
-            WHERE p.account.id = :accountId AND p.status = :status
+            WHERE p.channel.id = :channelId AND p.status = :status
             """)
-    Slice<Post> findByAccountAndStatus(@Param("accountId") Long accountId, @Param("status") Status status,
+    Slice<Post> findByChannelAndStatus(@Param("channelId") Long channelId, @Param("status") Status status,
             Pageable pageable);
 
     /**
-     * Use an @EntityGraph to fetch account + files in one go:
+     * Use an @EntityGraph to fetch channel + files in one go:
      * 
      * @param status
      * @param pageable
      * @return
      */
-    @EntityGraph(attributePaths = { "account", "files" })
+    @EntityGraph(attributePaths = { "channel", "files" })
     Slice<Post> findByStatusOrderByAtDesc(Status status, Pageable pageable);
 
     @Query("""
             SELECT p FROM Post p
-            LEFT JOIN FETCH p.account
+            LEFT JOIN FETCH p.channel
             LEFT JOIN FETCH p.files
             WHERE p.status = 'PUBLISHED'
             """)

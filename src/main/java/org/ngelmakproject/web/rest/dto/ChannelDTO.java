@@ -1,8 +1,8 @@
 package org.ngelmakproject.web.rest.dto;
 
-import org.ngelmakproject.domain.Account;
+import org.ngelmakproject.domain.Channel;
 
-public record AccountDTO(
+public record ChannelDTO(
         Long id,
         String identifier,
         String name,
@@ -10,10 +10,10 @@ public record AccountDTO(
         String avatar,
         String banner,
         Long userId) {
-    public static AccountDTO from(Account a) {
+    public static ChannelDTO from(Channel a) {
         if (a == null)
             return null;
-        return new AccountDTO(
+        return new ChannelDTO(
                 a.getId(),
                 a.getIdentifier(),
                 a.getName(),

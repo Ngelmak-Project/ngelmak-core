@@ -40,7 +40,7 @@ public class Feed implements Serializable {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "feed_owner_id")
-    private Account feedOwner;
+    private Channel feedOwner;
 
     public Long getId() {
         return id;
@@ -58,11 +58,11 @@ public class Feed implements Serializable {
         this.post = post;
     }
 
-    public Account getFeedOwner() {
+    public Channel getFeedOwner() {
         return feedOwner;
     }
 
-    public void setFeedOwner(Account feedOwner) {
+    public void setFeedOwner(Channel feedOwner) {
         this.feedOwner = feedOwner;
     }
 

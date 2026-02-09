@@ -28,7 +28,7 @@ public record ReactionSummaryDTO(
             counts.merge(reaction.getEmoji(), 1, Integer::sum);
 
             // Detect current user's reaction
-            if (currentUserId != null && currentUserId.equals(reaction.getAccount().getId())) {
+            if (currentUserId != null && currentUserId.equals(reaction.getChannel().getId())) {
                 userEmoji = reaction.getEmoji();
                 userReactionId = reaction.getId();
             }

@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import org.ngelmakproject.domain.Account;
+import org.ngelmakproject.domain.Channel;
 import org.ngelmakproject.domain.File;
 import org.ngelmakproject.domain.Post;
 import org.ngelmakproject.domain.Reaction;
@@ -18,7 +18,7 @@ import org.ngelmakproject.repository.ReactionRepository;
 import org.ngelmakproject.web.rest.dto.PageDTO;
 import org.ngelmakproject.web.rest.dto.PostDTO;
 import org.ngelmakproject.web.rest.dto.ReactionSummaryDTO;
-import org.ngelmakproject.web.rest.errors.AccountNotFoundException;
+import org.ngelmakproject.web.rest.errors.ChannelNotFoundException;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
 import org.ngelmakproject.web.rest.errors.ResourceNotFoundException;
 import org.ngelmakproject.web.rest.errors.UnauthorizedResourceAccessException;
@@ -50,19 +50,19 @@ public class PostService {
 
     private final PostRepository postRepository;
     private final FileService fileService;
-    private final AccountService accountService;
+    private final ChannelService channelService;
     private final ReactionRepository reactionRepository;
     private final EntityManager entityManager;
 
     PostService(PostRepository postRepository,
             FileService fileService,
             ReactionRepository reactionRepository,
-            AccountService accountService,
+            ChannelService channelService,
             EntityManager entityManager) {
         this.postRepository = postRepository;
         this.reactionRepository = reactionRepository;
         this.fileService = fileService;
-        this.accountService = accountService;
+        this.channelService = channelService;
         this.entityManager = entityManager;
     }
 
@@ -78,7 +78,7 @@ public class PostService {
         if (post.getContent().length() > 3000) {
             throw new BadRequestAlertException("Contenu trop long > 3000 caractères.", ENTITY_NAME, "contentTooLong");
         }
-        return accountService.findOneByCurrentUser().map(account -> {
+        return channelService.findOneByCurrentUser().map(channel -> {
             /* 1. we start by saving the files if exists */
             List<File> files = fileService.save(medias, covers);
             /* 2. then save the post with the attachments */
@@ -87,9 +87,9 @@ public class PostService {
             post.status(Status.VALIDATED) // default status is PENDING
                     .at(Instant.now()) // set the current time
                     .files(new HashSet<File>(files)) // attach files to the post
-                    .account(account); // set the current connected user as owner of the post.
+                    .channel(channel); // set the current connected user as owner of the post.
             return postRepository.save(post);
-        }).orElseThrow(AccountNotFoundException::new);
+        }).orElseThrow(ChannelNotFoundException::new);
     }
 
     /**
@@ -107,11 +107,11 @@ public class PostService {
         if (post.getContent().length() > 3000) {
             throw new BadRequestAlertException("Contenu trop long > 3000 caractères.", ENTITY_NAME, "contentTooLong");
         }
-        return accountService.findOneByCurrentUser().map(account -> {
+        return channelService.findOneByCurrentUser().map(channel -> {
             return postRepository.findById(post.getId())
                     .map(existingPost -> {
-                        if (account.getId() != existingPost.getAccount().getId()) {
-                            throw new UnauthorizedResourceAccessException(account.getUser(), existingPost.getId(),
+                        if (channel.getId() != existingPost.getChannel().getId()) {
+                            throw new UnauthorizedResourceAccessException(channel.getUser(), existingPost.getId(),
                                     ENTITY_NAME);
                         }
                         /* 1. we start by saving the files if exists */
@@ -146,7 +146,7 @@ public class PostService {
                         return existingPost;
                     })
                     .orElseThrow(() -> new ResourceNotFoundException("Entity not found", ENTITY_NAME, "idnotfound"));
-        }).orElseThrow(AccountNotFoundException::new);
+        }).orElseThrow(ChannelNotFoundException::new);
     }
 
     /**
@@ -211,7 +211,7 @@ public class PostService {
                 "  p.id AS post_reference_id, " +
                 "  p.title AS post_reference_title, " +
                 "  p.content AS post_reference_content, " +
-                "  a.name AS account_name " +
+                "  a.name AS channel_name " +
                 "FROM ( " +
                 "  SELECT p.* FROM ( " +
                 "    SELECT *, ts_rank_cd(textsearchable_index_col, query) AS rank " +
@@ -221,13 +221,13 @@ public class PostService {
                 "  LEFT JOIN (SELECT id, ts_rank_cd(textsearchable_index_col, query) AS rank " +
                 "  FROM nk_post, websearch_to_tsquery('french', :fullText) query " +
                 "  WHERE textsearchable_index_col @@ query) AS a " +
-                "  ON p.account_id = a.id " +
+                "  ON p.channel_id = a.id " +
                 "  ORDER BY a.rank,p.rank DESC " +
                 "  LIMIT :limit " +
                 "  OFFSET :offset " +
                 ") AS full_search " +
                 "LEFT JOIN nk_post AS p ON full_search.post_reference_id = p.id " +
-                "LEFT JOIN nk_account AS a ON a.id = p.account_id";
+                "LEFT JOIN nk_channel AS a ON a.id = p.channel_id";
         Query query = entityManager.createNativeQuery(sqlQuery, Tuple.class);
         query.setParameter("fullText", fullText);
         query.setParameter("limit", pageable.getPageSize());
@@ -236,9 +236,9 @@ public class PostService {
         List<Post> posts = result.stream()
                 .map(t -> {
                     Post post = new Post();
-                    var account = new Account();
-                    account.setId(t.get("account_id", Long.class));
-                    account.setName(t.get("account_name", String.class));
+                    var channel = new Channel();
+                    channel.setId(t.get("channel_id", Long.class));
+                    channel.setName(t.get("channel_name", String.class));
                     // java.time.Instant
                     post.id(t.get("id", Long.class))
                             .keywords(t.get("keywords", String.class))
@@ -247,7 +247,7 @@ public class PostService {
                             .visibility(Visibility.valueOf(t.get("visibility", String.class)))
                             .content(t.get("content", String.class))
                             .status(Status.valueOf(t.get("status", String.class)))
-                            .account(account)
+                            .channel(channel)
                             .postReply(
                                     new Post()
                                             .id(t.get("post_reference_id", Long.class))
@@ -281,7 +281,7 @@ public class PostService {
     /**
      * Retrieves a pageable list of all posts enriched with:
      * <p>
-     * - minimal account information
+     * - minimal channel information
      * - attached files
      * - aggregated reaction summaries (emoji → count + current user reaction)
      * </p>
@@ -290,11 +290,11 @@ public class PostService {
      * @return
      */
     public PageDTO<PostDTO> getPostByAuthenticatedUser(Pageable pageable) {
-        Account account = accountService.findOneByCurrentUser().orElseThrow(AccountNotFoundException::new);
-        List<Post> posts = this.postRepository.findByAccount(
-                account.getId(),
+        Channel channel = channelService.findOneByCurrentUser().orElseThrow(ChannelNotFoundException::new);
+        List<Post> posts = this.postRepository.findByChannel(
+                channel.getId(),
                 pageable).getContent();
-        var postDTOs = filloutReactions(posts, account.getId());
+        var postDTOs = filloutReactions(posts, channel.getId());
         Page<PostDTO> page = new PageImpl<>(postDTOs, pageable, postDTOs.size());
         return PageDTO.from(page);
     }
@@ -302,22 +302,22 @@ public class PostService {
     /**
      * Retrieves a pageable list of validated posts enriched with:
      * <p>
-     * - minimal account information
+     * - minimal channel information
      * - attached files
      * - aggregated reaction summaries (emoji → count + current user reaction)
      * </p>
      *
-     * @param accountId id of the account to which the posts belong.
+     * @param channelId id of the channel to which the posts belong.
      * @param pageable
      * @return
      */
-    public PageDTO<PostDTO> getPostByAccount(Long accountId, Pageable pageable) {
-        // 1. Fetch post entries with accounts, and files
-        List<Post> posts = this.postRepository.findByAccountAndStatus(
-                accountId,
+    public PageDTO<PostDTO> getPostByChannel(Long channelId, Pageable pageable) {
+        // 1. Fetch post entries with channels, and files
+        List<Post> posts = this.postRepository.findByChannelAndStatus(
+                channelId,
                 Status.VALIDATED,
                 pageable).getContent();
-        var postDTOs = filloutReactions(posts, accountId);
+        var postDTOs = filloutReactions(posts, channelId);
         Page<PostDTO> page = new PageImpl<>(postDTOs, pageable, postDTOs.size());
         return PageDTO.from(page);
     }
@@ -325,17 +325,17 @@ public class PostService {
     /**
      * This method avoids N+1 queries by:
      * <p>
-     * 1. Fetching posts with account + files in a single query
+     * 1. Fetching posts with channel + files in a single query
      * 2. Fetching all reactions for all posts in one bulk query
      * 3. Building reaction summaries in memory
      * 4. Mapping everything into PostDTO objects
      * <\p>
      * 
      * @param posts
-     * @param accountId
+     * @param channelId
      * @return
      */
-    private List<PostDTO> filloutReactions(List<Post> posts, Long accountId) {
+    private List<PostDTO> filloutReactions(List<Post> posts, Long channelId) {
         // Extract post IDs
         List<Long> postIds = posts.stream().map(Post::getId).toList();
         // 2. Bulk fetch reactions for all posts in the feed
@@ -345,7 +345,7 @@ public class PostService {
         // 4. Map post entries to DTOs
         List<PostDTO> postDTOs = posts.stream().map(post -> {
             List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
-            ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions, accountId);
+            ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions, channelId);
             return PostDTO.from(post, summary);
         }).toList();
 

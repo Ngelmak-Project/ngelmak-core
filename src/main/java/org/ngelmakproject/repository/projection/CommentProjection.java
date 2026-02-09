@@ -17,7 +17,7 @@ public interface CommentProjection {
 
     Long getReplyToId();
 
-    Long getAccountId();
+    Long getChannelId();
 
     Long getFileId();
 

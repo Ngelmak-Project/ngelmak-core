@@ -17,21 +17,19 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToMany;
-import jakarta.persistence.OneToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 /**
- * The Compte entity.
+ * The Channel entity.
  */
 @Entity
-@Table(name = "nk_account")
+@Table(name = "nk_channel")
 @SuppressWarnings("common-java:DuplicatedBlocks")
-public class Account implements Serializable {
+public class Channel implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
@@ -41,13 +39,13 @@ public class Account implements Serializable {
     @Column(name = "id")
     private Long id;
 
-    /* User (auth-service) that own the account */
+    /* User (auth-service) that own the channel */
     @Column(name = "user_id", unique = true, nullable = false)
     private Long user;
 
     /**
      * A string or code used in URLs
-     * /account/acme-corp
+     * /channel/acme-corp
      * identifier = "acme-corp"
      */
     @Column(name = "identifier", length = 30, unique = true)
@@ -85,33 +83,25 @@ public class Account implements Serializable {
     private Instant deletedAt;
 
     /**
-     * a default configuration can be set for visibility of posts and their eventual
-     * attachments.
+     * a ticket could be also related to a an channel.
      */
-    @OneToOne(fetch = FetchType.LAZY, optional = true)
-    @JoinColumn(unique = true)
-    private Config configuration;
-
-    /**
-     * a ticket could be also related to a an account.
-     */
-    @OneToMany(fetch = FetchType.LAZY, mappedBy = "accountRelated")
+    @OneToMany(fetch = FetchType.LAZY, mappedBy = "channelRelated")
     @JsonIgnore
     private Set<Ticket> reports = new HashSet<>();
 
     /**
-     * must be is issued by a user account.
+     * must be is issued by a user channel.
      */
     @OneToMany(fetch = FetchType.LAZY, mappedBy = "issuedby")
     @JsonIgnore
     private Set<Ticket> owners = new HashSet<>();
 
-    @OneToMany(fetch = FetchType.LAZY, mappedBy = "account")
+    @OneToMany(fetch = FetchType.LAZY, mappedBy = "channel")
     @JsonIgnore
     private Set<Comment> comments = new HashSet<>();
 
     /**
-     * any user can subscribe to any other user's account which my eventually have
+     * any user can subscribe to any other user's channel which my eventually have
      * any subscriber
      */
     @OneToMany(fetch = FetchType.LAZY, mappedBy = "follower")
@@ -122,14 +112,14 @@ public class Account implements Serializable {
     @JsonIgnore
     private Set<Membership> subscriptions = new HashSet<>();
 
-    @OneToMany(fetch = FetchType.LAZY, mappedBy = "account")
+    @OneToMany(fetch = FetchType.LAZY, mappedBy = "channel")
     @JsonIgnore
     private Set<Post> posts = new HashSet<>();
 
     /**
      * a review is done by a user
      */
-    @OneToMany(fetch = FetchType.LAZY, mappedBy = "account")
+    @OneToMany(fetch = FetchType.LAZY, mappedBy = "channel")
     @JsonIgnore
     private Set<Review> reviews = new HashSet<>();
 
@@ -211,14 +201,6 @@ public class Account implements Serializable {
 
     public void setDeletedAt(Instant deletedAt) {
         this.deletedAt = deletedAt;
-    }
-
-    public Config getConfiguration() {
-        return configuration;
-    }
-
-    public void setConfiguration(Config configuration) {
-        this.configuration = configuration;
     }
 
     public Set<Ticket> getReports() {

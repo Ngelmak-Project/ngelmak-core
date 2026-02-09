@@ -2,7 +2,7 @@ package org.ngelmakproject.repository;
 
 import java.util.List;
 
-import org.ngelmakproject.domain.Account;
+import org.ngelmakproject.domain.Channel;
 import org.ngelmakproject.domain.Feed;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -16,8 +16,8 @@ import org.springframework.stereotype.Repository;
 @SuppressWarnings("unused")
 @Repository
 public interface FeedRepository extends JpaRepository<Feed, Long> {
-  Slice<Feed> findByFeedOwnerIn(List<Account> feedOwners, Pageable pageable);
+  Slice<Feed> findByFeedOwnerIn(List<Channel> feedOwners, Pageable pageable);
 
-  @EntityGraph(attributePaths = { "post", "post.account", "post.files" })
-  Slice<Feed> findByFeedOwner(Account feedOwner, Pageable pageable);
+  @EntityGraph(attributePaths = { "post", "post.channel", "post.files" })
+  Slice<Feed> findByFeedOwner(Channel feedOwner, Pageable pageable);
 }

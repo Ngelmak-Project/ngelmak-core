@@ -11,7 +11,7 @@ import org.ngelmakproject.domain.Comment;
 import org.ngelmakproject.domain.File;
 import org.ngelmakproject.repository.CommentRepository;
 import org.ngelmakproject.repository.projection.CommentProjection;
-import org.ngelmakproject.web.rest.errors.AccountNotFoundException;
+import org.ngelmakproject.web.rest.errors.ChannelNotFoundException;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
 import org.ngelmakproject.web.rest.errors.ResourceNotFoundException;
 import org.ngelmakproject.web.rest.errors.UnauthorizedResourceAccessException;
@@ -35,14 +35,14 @@ public class CommentService {
 
     private final FileService fileService;
     private final PostService postService;
-    private final AccountService accountService;
+    private final ChannelService channelService;
     private final CommentRepository commentRepository;
 
     public CommentService(CommentRepository commentRepository, FileService fileService,
-            AccountService accountService, PostService postService) {
+            ChannelService channelService, PostService postService) {
         this.commentRepository = commentRepository;
         this.fileService = fileService;
-        this.accountService = accountService;
+        this.channelService = channelService;
         this.postService = postService;
     }
 
@@ -58,7 +58,7 @@ public class CommentService {
             throw new BadRequestAlertException("Contenu trop long > 1000 caractères.", ENTITY_NAME, "contentTooLong");
         }
         // [TODO] This action should be done asynchronously with redis database
-        return accountService.findOneByCurrentUser().map(account -> {
+        return channelService.findOneByCurrentUser().map(channel -> {
             /* 1. we start by saving the files if exists */
             List<MultipartFile> medias = media.map(m -> Arrays.asList(m)).orElse(List.of());
             List<File> files = fileService.save(medias);
@@ -66,7 +66,7 @@ public class CommentService {
             comment
                     .at(Instant.now()) // set the current time
                     .file(files.stream().findFirst().orElse(null)) // attach the file is exists.
-                    .account(account); // set the current connected user as owner of the comment.
+                    .channel(channel); // set the current connected user as owner of the comment.
             // [TODO] Use Redis to record the changes.
             if (comment.getPost() != null) {
                 this.postService.updateCommmentCount(comment.getPost().getId(), 1);
@@ -79,7 +79,7 @@ public class CommentService {
             }
 
             return commentRepository.save(comment);
-        }).orElseThrow(AccountNotFoundException::new);
+        }).orElseThrow(ChannelNotFoundException::new);
     }
 
     /**
@@ -93,12 +93,12 @@ public class CommentService {
         if (comment.getContent().length() > 1000) {
             throw new BadRequestAlertException("Contenu trop long > 1000 caractères.", ENTITY_NAME, "contentTooLong");
         }
-        return accountService.findOneByCurrentUser().map(account -> {
+        return channelService.findOneByCurrentUser().map(channel -> {
             return commentRepository
                     .findById(comment.getId())
                     .map(existingComment -> {
-                        if (account.getId() != existingComment.getAccount().getId()) {
-                            throw new UnauthorizedResourceAccessException(account.getUser(), existingComment.getId(),
+                        if (channel.getId() != existingComment.getChannel().getId()) {
+                            throw new UnauthorizedResourceAccessException(channel.getUser(), existingComment.getId(),
                                     ENTITY_NAME);
                         }
                         existingComment.setLastUpdate(Instant.now());
@@ -118,7 +118,7 @@ public class CommentService {
                         return this.commentRepository.save(existingComment);
                     })
                     .orElseThrow(() -> new ResourceNotFoundException("Entity not found", ENTITY_NAME, "idnotfound"));
-        }).orElseThrow(AccountNotFoundException::new);
+        }).orElseThrow(ChannelNotFoundException::new);
     }
 
     /**
@@ -159,7 +159,7 @@ public class CommentService {
      * </p>
      *
      * @param id the identifier of the comment to delete
-     * @throws AccountNotFoundException            if no authenticated account is
+     * @throws ChannelNotFoundException            if no authenticated channel is
      *                                             found
      * @throws UnauthorizedResourceAccessException if the comment does not belong to
      *                                             the current user
@@ -167,15 +167,15 @@ public class CommentService {
     public void delete(Long id) {
         log.debug("Request to delete Comment : {}", id);
 
-        var account = accountService.findOneByCurrentUser()
-                .orElseThrow(AccountNotFoundException::new);
+        var channel = channelService.findOneByCurrentUser()
+                .orElseThrow(ChannelNotFoundException::new);
 
         commentRepository.findProjectedById(id).ifPresent(projection -> {
 
             // Authorization check: ensure the comment belongs to the current user
-            if (!account.getId().equals(projection.getAccountId())) {
+            if (!channel.getId().equals(projection.getChannelId())) {
                 throw new UnauthorizedResourceAccessException(
-                        account.getUser(), id, ENTITY_NAME);
+                        channel.getUser(), id, ENTITY_NAME);
             }
 
             // Soft delete using JPQL update (no entity loading)

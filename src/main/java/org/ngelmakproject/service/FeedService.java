@@ -6,7 +6,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import org.ngelmakproject.domain.Account;
+import org.ngelmakproject.domain.Channel;
 import org.ngelmakproject.domain.Feed;
 import org.ngelmakproject.domain.Post;
 import org.ngelmakproject.domain.Reaction;
@@ -40,15 +40,15 @@ public class FeedService {
     private final FeedRepository feedRepository;
     private final ReactionRepository reactionRepository;
     private final PostRepository postRepository;
-    private final AccountService accountService;
+    private final ChannelService channelService;
     private final MembershipRepository membershipRepository;
 
     public FeedService(FeedRepository feedRepository, ReactionRepository reactionRepository,
-            AccountService accountService,
+            ChannelService channelService,
             MembershipRepository membershipRepository, PostRepository postRepository) {
         this.feedRepository = feedRepository;
         this.reactionRepository = reactionRepository;
-        this.accountService = accountService;
+        this.channelService = channelService;
         this.membershipRepository = membershipRepository;
         this.postRepository = postRepository;
     }
@@ -67,7 +67,7 @@ public class FeedService {
      */
     public void propagatePostToFollowers(Post post) {
         log.debug("Propagate Post to get all followers.");
-        List<Feed> feeds = membershipRepository.findByFollowing(post.getAccount()).stream().map(membership -> {
+        List<Feed> feeds = membershipRepository.findByFollowing(post.getChannel()).stream().map(membership -> {
             Feed feed = new Feed();
             feed.setFeedOwner(membership.getFollower());
             feed.setPost(post);
@@ -78,14 +78,14 @@ public class FeedService {
 
     /**
      * Retrieves a pageable list of validated posts enriched with:
-     * - minimal account information (via EntityGraph on the repository)
+     * - minimal channel information (via EntityGraph on the repository)
      * - attached files (also via EntityGraph)
      * - aggregated reaction summaries (emoji → count + current user reaction)
      * - commentCount already stored on Post (no comment fetching required)
      *
      * <p>
      * This method avoids N+1 queries by:
-     * 1. Fetching posts with account + files in a single query
+     * 1. Fetching posts with channel + files in a single query
      * 2. Fetching all reactions for all posts in one bulk query
      * 3. Building reaction summaries in memory
      * 4. Mapping everything into PostDTO objects
@@ -95,12 +95,12 @@ public class FeedService {
      * @return
      */
     public PageDTO<FeedDTO> getFeed(Pageable pageable) {
-        // 1. Fetch feed entries with posts, accounts, and files
-        Optional<Account> optional = accountService.findOneByCurrentUser();
+        // 1. Fetch feed entries with posts, channels, and files
+        Optional<Channel> optional = channelService.findOneByCurrentUser();
         List<Feed> feeds = new ArrayList<>();
         if (optional.isPresent()) {
-            log.debug("Request to retrieve Feeds for Account {}.", optional.get());
-            // Fetch feed entries with posts, accounts, and files
+            log.debug("Request to retrieve Feeds for Channel {}.", optional.get());
+            // Fetch feed entries with posts, channels, and files
             var page = feedRepository.findByFeedOwner(optional.get(), pageable);
             feeds = new ArrayList<>(page.getContent());
         }
@@ -129,7 +129,7 @@ public class FeedService {
             var post = feed.getPost();
             List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
             ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions,
-                    optional.map(Account::getId).orElse(null));
+                    optional.map(Channel::getId).orElse(null));
             return FeedDTO.from(feed.getId(), PostDTO.from(post, summary));
         }).toList();
 

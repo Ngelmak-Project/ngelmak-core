@@ -10,7 +10,7 @@ public record CommentDTO(
         Integer replyCount,
         Instant at,
         FileDTO file,
-        AccountDTO account,
+        ChannelDTO channel,
         CommentDTO replayto) {
     public static CommentDTO from(Comment c) {
         if (c == null)
@@ -21,7 +21,7 @@ public record CommentDTO(
                 c.getReplyCount(),
                 c.getAt(),
                 FileDTO.from(c.getFile()),
-                AccountDTO.from(c.getAccount()),
+                ChannelDTO.from(c.getChannel()),
                 CommentDTO.from(c.getReplyTo()));
     }
 }

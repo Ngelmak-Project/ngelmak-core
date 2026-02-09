@@ -65,7 +65,7 @@ public class Comment implements Serializable {
     @ManyToOne(fetch = FetchType.LAZY, optional = false, cascade = CascadeType.REMOVE)
     @NotNull
     @JsonIncludeProperties(value = { "id" })
-    private Account account;
+    private Channel channel;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JsonIncludeProperties(value = { "id", "url" })
@@ -267,16 +267,16 @@ public class Comment implements Serializable {
         return this;
     }
 
-    public Account getAccount() {
-        return this.account;
+    public Channel getChannel() {
+        return this.channel;
     }
 
-    public void setAccount(Account account) {
-        this.account = account;
+    public void setChannel(Channel channel) {
+        this.channel = channel;
     }
 
-    public Comment account(Account account) {
-        this.setAccount(account);
+    public Comment channel(Channel channel) {
+        this.setChannel(channel);
         return this;
     }
 

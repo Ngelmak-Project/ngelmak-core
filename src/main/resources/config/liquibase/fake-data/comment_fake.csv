@@ -1,4 +1,4 @@
-id;at;content;opinion;post_id;account_id
+id;at;content;opinion;post_id;channel_id
 2;1986-08-29T01:59:15.793182;Spring deal material.;NEUTRAL;68;90
 3;2007-05-12T02:44:01.082783;Walk certain clearly organization course.;DEFAULT;31;43
 4;1993-10-13T13:42:56.948254;Determine single fast probably next.;DEFAULT;61;5
@@ -109,7 +109,7 @@ id;at;content;opinion;post_id;account_id
 109;1982-01-21T20:40:32.231659;For character writer career instead.;NEUTRAL;10;99
 110;1975-02-11T12:50:56.947363;Article word likely administration free activity explain.;DEFAULT;22;6
 111;2025-08-18T06:42:43.899984;Floor study book forward husband.;DEFAULT;11;55
-112;1989-08-27T23:26:22.237765;Poor four interesting identify account.;OPPOSED;59;24
+112;1989-08-27T23:26:22.237765;Poor four interesting identify channel.;OPPOSED;59;24
 113;2022-07-12T23:41:24.051040;Four age side as to machine.;NEUTRAL;5;67
 114;2003-08-19T12:13:17.539341;Instead state team although stage improve word.;OPPOSED;5;10
 115;1971-12-24T03:24:05.962197;Million prepare to bank direction inside.;NEUTRAL;77;5
@@ -262,7 +262,7 @@ id;at;content;opinion;post_id;account_id
 262;1995-02-03T14:56:15.431773;Long message none nor law deep low.;DEFAULT;9;43
 263;1970-06-03T11:53:46.252324;Policy call debate yourself heart long analysis.;SUPPORT;89;67
 264;2012-12-09T00:59:44.423613;Save result thus especially these once begin we.;OPPOSED;89;32
-265;1977-07-28T09:45:04.892396;Professional development dog account glass draw.;OPPOSED;76;26
+265;1977-07-28T09:45:04.892396;Professional development dog channel glass draw.;OPPOSED;76;26
 266;2003-07-24T23:03:15.874414;Remain yet tree guess west.;DEFAULT;33;29
 267;2003-02-04T13:53:27.545969;Name reach attack scientist.;SUPPORT;26;94
 268;1993-06-29T23:45:20.013432;Federal spring population.;OPPOSED;74;74
@@ -351,7 +351,7 @@ id;at;content;opinion;post_id;account_id
 351;1977-08-20T16:42:08.511460;Any everything politics himself.;SUPPORT;36;62
 352;2015-02-06T13:33:59.239897;Consumer do radio base wide issue.;NEUTRAL;82;100
 353;2000-01-16T19:38:08.247870;Fall more avoid shake animal finish important.;DEFAULT;37;8
-354;1982-12-05T17:11:50.259026;Professor account white behind stock little.;DEFAULT;49;85
+354;1982-12-05T17:11:50.259026;Professor channel white behind stock little.;DEFAULT;49;85
 355;2005-12-21T09:46:59.092544;Program keep stock man voice why control.;NEUTRAL;59;44
 356;1995-06-15T07:29:07.095671;Itself seek hear ground air sometimes.;NEUTRAL;75;84
 357;2000-12-10T10:33:32.665876;Pretty none fund authority financial leave our.;DEFAULT;71;65
@@ -554,7 +554,7 @@ id;at;content;opinion;post_id;account_id
 554;1991-03-26T21:46:12.895357;Relationship fish discuss visit either can safe.;SUPPORT;43;25
 555;2013-09-21T07:46:52.123038;Remain must week ahead shoulder meet offer oil.;SUPPORT;10;28
 556;2014-05-27T23:11:34.144679;Science always tough.;DEFAULT;39;78
-557;1998-12-08T00:06:51.958204;Again account international prove consumer old matter.;DEFAULT;5;22
+557;1998-12-08T00:06:51.958204;Again channel international prove consumer old matter.;DEFAULT;5;22
 558;1971-05-15T18:38:36.220527;Manage technology here and.;NEUTRAL;25;89
 559;1970-09-18T09:22:34.319787;Key reason player dinner surface short.;OPPOSED;70;31
 560;2024-03-03T12:34:38.305455;Citizen will whom language.;OPPOSED;82;59
@@ -625,7 +625,7 @@ id;at;content;opinion;post_id;account_id
 625;2015-02-22T08:27:37.209171;Able close listen go could audience.;SUPPORT;70;33
 626;2022-08-25T22:02:24.018201;He audience space worry.;OPPOSED;68;41
 627;1989-07-03T19:37:52.773713;Risk something political mean reveal.;DEFAULT;70;97
-628;1979-12-26T18:35:09.563951;Team staff account eat Congress hair financial.;OPPOSED;7;15
+628;1979-12-26T18:35:09.563951;Team staff channel eat Congress hair financial.;OPPOSED;7;15
 629;1986-06-09T15:50:33.875597;Class first country hit pick practice develop increase.;DEFAULT;66;70
 630;1987-11-03T21:51:05.368957;Push us year early hot.;DEFAULT;50;94
 631;2013-05-19T15:22:53.898271;Miss yes will father imagine Democrat media.;SUPPORT;74;39
@@ -978,7 +978,7 @@ id;at;content;opinion;post_id;account_id
 978;2018-08-13T13:37:40.996726;Force individual either song shoulder which receive.;SUPPORT;60;96
 979;2025-04-05T19:41:54.717954;Rather less Republican few wall resource edge night.;SUPPORT;74;24
 980;1980-05-20T21:14:17.331410;Republican suggest significant her.;DEFAULT;72;7
-981;1971-11-21T04:00:13.095796;Notice account seek citizen fund two go.;DEFAULT;83;55
+981;1971-11-21T04:00:13.095796;Notice channel seek citizen fund two go.;DEFAULT;83;55
 982;2022-01-21T21:07:29.198050;Also trip hundred course charge.;NEUTRAL;23;81
 983;2014-12-29T09:05:26.722349;Attack Republican drive while.;OPPOSED;52;78
 984;2016-10-20T13:25:59.220957;Their enjoy religious.;OPPOSED;16;27

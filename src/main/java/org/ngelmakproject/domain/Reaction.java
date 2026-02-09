@@ -25,8 +25,8 @@ public class Reaction {
     private Post post;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "account_id")
-    private Account account;
+    @JoinColumn(name = "channel_id")
+    private Channel channel;
 
     @Column(name = "emoji", nullable = false)
     private String emoji;
@@ -47,12 +47,12 @@ public class Reaction {
         this.post = post;
     }
 
-    public Account getAccount() {
-        return account;
+    public Channel getChannel() {
+        return channel;
     }
 
-    public void setAccount(Account account) {
-        this.account = account;
+    public void setChannel(Channel channel) {
+        this.channel = channel;
     }
 
     public String getEmoji() {

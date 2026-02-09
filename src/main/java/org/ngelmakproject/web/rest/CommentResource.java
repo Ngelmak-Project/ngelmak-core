@@ -111,20 +111,20 @@ public class CommentResource {
     }
 
     /**
-     * {@code GET  /comments/account/:id} : get all the comments for a given account
+     * {@code GET  /comments/channel/:id} : get all the comments for a given channel
      * id.
      *
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and the list
      *         of comments in body.
      */
-    @GetMapping("/account/{id}")
-    public ResponseEntity<PageDTO<CommentDTO>> getCommentsByAccount(@PathVariable Long id, Pageable pageable) {
-        log.debug("REST request to get Comments of Account id : {} | Pageable {}", id, pageable);
+    @GetMapping("/channel/{id}")
+    public ResponseEntity<PageDTO<CommentDTO>> getCommentsByChannel(@PathVariable Long id, Pageable pageable) {
+        log.debug("REST request to get Comments of Channel id : {} | Pageable {}", id, pageable);
         if (id == null) {
-            throw new BadRequestAlertException("Account id is required to retrieve comments", ENTITY_NAME,
-                    "idAccountNull");
+            throw new BadRequestAlertException("Channel id is required to retrieve comments", ENTITY_NAME,
+                    "idChannelNull");
         }
-        Slice<CommentDTO> page = commentRepository.findCommentsByAccountOrByAtDesc(id, pageable)
+        Slice<CommentDTO> page = commentRepository.findCommentsByChannelOrByAtDesc(id, pageable)
                 .map(c -> CommentDTO.from(c));
         return ResponseEntity.ok().body(PageDTO.from(page));
     }

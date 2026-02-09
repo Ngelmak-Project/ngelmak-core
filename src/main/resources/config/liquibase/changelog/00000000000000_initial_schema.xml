@@ -7,9 +7,9 @@
     
     <changeSet id="202511021704-1" author="ngelmak">
         <loadData
-            file="config/liquibase/fake-data/account_fake.csv"
+            file="config/liquibase/fake-data/channel_fake.csv"
             separator=";"
-            tableName="nk_account">
+            tableName="nk_channel">
         </loadData>
     </changeSet>
     

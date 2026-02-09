@@ -7,7 +7,7 @@ import java.util.Map;
 
 import org.ngelmakproject.domain.Reaction;
 import org.ngelmakproject.repository.ReactionRepository;
-import org.ngelmakproject.web.rest.errors.AccountNotFoundException;
+import org.ngelmakproject.web.rest.errors.ChannelNotFoundException;
 import org.ngelmakproject.web.rest.errors.ResourceNotFoundException;
 import org.ngelmakproject.web.rest.errors.UnauthorizedResourceAccessException;
 import org.slf4j.Logger;
@@ -28,12 +28,12 @@ public class ReactionService {
     private static final String ENTITY_NAME = "reaction";
 
     private final ReactionRepository reactionRepository;
-    private final AccountService accountService;
+    private final ChannelService channelService;
 
     ReactionService(ReactionRepository reactionRepository,
-            AccountService accountService) {
+            ChannelService channelService) {
         this.reactionRepository = reactionRepository;
-        this.accountService = accountService;
+        this.channelService = channelService;
     }
 
     /**
@@ -50,12 +50,12 @@ public class ReactionService {
     @Transactional
     public Reaction save(Reaction reaction) {
         log.debug("Request to save Reaction : {}", reaction);
-        return accountService.findOneByCurrentUser().map(account -> {
+        return channelService.findOneByCurrentUser().map(channel -> {
             // [TODO] Only save on redis database and not on the persistent database for
             // fast response.
-            reaction.setAccount(account); // set the current connected user as owner of the reaction.
+            reaction.setChannel(channel); // set the current connected user as owner of the reaction.
             return reactionRepository.save(reaction);
-        }).orElseThrow(AccountNotFoundException::new);
+        }).orElseThrow(ChannelNotFoundException::new);
     }
 
     /**
@@ -68,11 +68,11 @@ public class ReactionService {
      */
     public Reaction update(Reaction reaction) {
         log.debug("Request to update Reaction : {}", reaction);
-        return accountService.findOneByCurrentUser().map(account -> {
+        return channelService.findOneByCurrentUser().map(channel -> {
             return reactionRepository.findById(reaction.getId())
                     .map(existingPost -> {
-                        if (account.getId() != existingPost.getAccount().getId()) {
-                            throw new UnauthorizedResourceAccessException(account.getUser(), existingPost.getId(),
+                        if (channel.getId() != existingPost.getChannel().getId()) {
+                            throw new UnauthorizedResourceAccessException(channel.getUser(), existingPost.getId(),
                                     ENTITY_NAME);
                         }
                         if (reaction.getEmoji() != null) {
@@ -84,7 +84,7 @@ public class ReactionService {
                         return existingPost;
                     })
                     .orElseThrow(() -> new ResourceNotFoundException("Entity not found", ENTITY_NAME, "idnotfound"));
-        }).orElseThrow(AccountNotFoundException::new);
+        }).orElseThrow(ChannelNotFoundException::new);
     }
 
     /**

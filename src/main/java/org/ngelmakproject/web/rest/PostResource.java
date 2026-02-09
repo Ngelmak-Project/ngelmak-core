@@ -133,23 +133,23 @@ public class PostResource {
     }
 
     /**
-     * {@code GET  /posts/account/:id} : get all the posts.
+     * {@code GET  /posts/channel/:id} : get all the posts.
      *
-     * @param accountId of the Post to get.
+     * @param channelId of the Post to get.
      * @param pageable the pagination information.
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and the list
      *         of posts in body.
      */
-    @GetMapping("/account/{id}")
-    public ResponseEntity<PageDTO<PostDTO>> getPostByAccount(@PathVariable Long accountId, Pageable pageable) {
-        log.debug("REST request to get a page of Posts by Account : {}", accountId);
-        PageDTO<PostDTO> page = postService.getPostByAccount(accountId, pageable);
+    @GetMapping("/channel/{id}")
+    public ResponseEntity<PageDTO<PostDTO>> getPostByChannel(@PathVariable Long channelId, Pageable pageable) {
+        log.debug("REST request to get a page of Posts by Channel : {}", channelId);
+        PageDTO<PostDTO> page = postService.getPostByChannel(channelId, pageable);
         return ResponseEntity.ok().cacheControl(CacheControl.maxAge(60, TimeUnit.SECONDS))
                 .body(page);
     }
 
     /**
-     * {@code GET  /posts/me} : get all the posts of the connected user account.
+     * {@code GET  /posts/me} : get all the posts of the connected user channel.
      *
      * @param pageable the pagination information.
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and the list

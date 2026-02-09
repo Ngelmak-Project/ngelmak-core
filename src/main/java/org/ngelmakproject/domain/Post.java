@@ -78,7 +78,7 @@ public class Post implements Serializable {
     @ManyToOne(fetch = FetchType.EAGER, optional = false)
     @NotNull
     @JsonIncludeProperties(value = { "id", "identifier", "name", "avatar" })
-    private Account account;
+    private Channel channel;
 
     @ManyToMany(cascade = CascadeType.REMOVE) // [TODO] Make sure not to delete the file before checking first if it has
                                               // being used by another resource.
@@ -309,16 +309,16 @@ public class Post implements Serializable {
         return this;
     }
 
-    public Account getAccount() {
-        return this.account;
+    public Channel getChannel() {
+        return this.channel;
     }
 
-    public void setAccount(Account nkAccount) {
-        this.account = nkAccount;
+    public void setChannel(Channel nkChannel) {
+        this.channel = nkChannel;
     }
 
-    public Post account(Account nkAccount) {
-        this.setAccount(nkAccount);
+    public Post channel(Channel nkChannel) {
+        this.setChannel(nkChannel);
         return this;
     }
 

@@ -182,7 +182,7 @@ So, let's implement our full text search.
 
 ### Creating indexes
 
-We will first create some indexes to speed up text searches. In our case indexes will be on table `nk_account` to target `name` and `nk_post` with `title`, `content`, `keywords`.
+We will first create some indexes to speed up text searches. In our case indexes will be on table `nk_channel` to target `name` and `nk_post` with `title`, `content`, `keywords`.
 
 ```
 ALTER TABLE nk_post
@@ -235,10 +235,10 @@ Execution Time: 0.309 ms
 
 ---
 
-Now let's move to account as we would like also the query to consider the `nk_account`.
+Now let's move to channel as we would like also the query to consider the `nk_channel`.
 
 ```
-ALTER TABLE nk_account
+ALTER TABLE nk_channel
     ADD COLUMN textsearchable_index_col tsvector
                GENERATED ALWAYS AS (
                     setweight(to_tsvector('french', name), 'A')
@@ -248,13 +248,13 @@ ALTER TABLE nk_account
 Then we create a GIN index to speed up the search:
 
 ```
-CREATE INDEX nk_account_textsearch_idx ON nk_account USING GIN (textsearchable_index_col);
+CREATE INDEX nk_channel_textsearch_idx ON nk_channel USING GIN (textsearchable_index_col);
 ```
 
 ```
 EXPLAIN ANALYZE
 SELECT id, ts_rank_cd(textsearchable_index_col, query) AS rank
-FROM nk_account, websearch_to_tsquery('vestigium') query
+FROM nk_channel, websearch_to_tsquery('vestigium') query
 WHERE textsearchable_index_col @@ query
 ORDER BY rank DESC;
 LIMIT 10;
@@ -274,7 +274,7 @@ SELECT p.* FROM (
 LEFT JOIN (SELECT id, ts_rank_cd(textsearchable_index_col, query) AS rank
 FROM nk_post, websearch_to_tsquery('vestigium') query
 WHERE textsearchable_index_col @@ query) AS a
-ON p.account_id=a.id
+ON p.channel_id=a.id
 ORDER BY a.rank,p.rank DESC
 LIMIT 100;
 ```
@@ -299,7 +299,7 @@ Limit  (cost=25.63..25.64 rows=1 width=428) (actual time=0.077..0.078 rows=1 loo
                                       ->  Bitmap Index Scan on nk_post_textsearch_idx  (cost=0.00..12.05 rows=7 width=0) (actual time=0.009..0.009 rows=42 loops=1)
                                             Index Cond: (textsearchable_index_col @@ query.query)
                     ->  Index Scan using nk_post_pkey on nk_post nk_post_1  (cost=0.28..2.65 rows=1 width=40) (actual time=0.002..0.002 rows=1 loops=6)
-                          Index Cond: (id = nk_post.account_id)
+                          Index Cond: (id = nk_post.channel_id)
               ->  Function Scan on websearch_to_tsquery query_1  (cost=0.25..0.26 rows=1 width=32) (actual time=0.000..0.000 rows=1 loops=6)
 Planning Time: 0.220 ms
 Execution Time: 0.106 ms
@@ -316,7 +316,7 @@ SELECT p.* FROM (
 LEFT JOIN (SELECT id, ts_rank_cd(textsearchable_index_col, query) AS rank
 FROM nk_post, websearch_to_tsquery('vestigium') query
 WHERE textsearchable_index_col @@ query) AS a
-ON p.account_id=a.id
+ON p.channel_id=a.id
 ORDER BY a.rank,p.rank DESC
 LIMIT 100;
 
@@ -325,7 +325,7 @@ SELECT
   full_search.title,
   p.title AS post_reference_title,
   p.content AS post_reference_content,
-  a.name AS account_name
+  a.name AS channel_name
 FROM (
   SELECT p.* FROM (
     SELECT *, ts_rank_cd(textsearchable_index_col, query) AS rank
@@ -335,12 +335,12 @@ FROM (
   LEFT JOIN (SELECT id, ts_rank_cd(textsearchable_index_col, query) AS rank
   FROM nk_post, websearch_to_tsquery('vestigium creator') query
   WHERE textsearchable_index_col @@ query) AS a
-  ON p.account_id=a.id
+  ON p.channel_id=a.id
   ORDER BY a.rank,p.rank DESC
   LIMIT 100
 ) AS full_search
 LEFT JOIN nk_post AS p ON full_search.post_reference_id = p.id
-LEFT JOIN nk_account AS a ON a.id = p.account_id;
+LEFT JOIN nk_channel AS a ON a.id = p.channel_id;
 ```
 
 ## Getting started with PostgreSQL (linux teminal only)
