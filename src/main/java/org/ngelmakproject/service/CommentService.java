@@ -78,8 +78,7 @@ public class CommentService {
                         ENTITY_NAME, "missingPostOrComment");
             }
 
-            commentRepository.save(comment);
-            return comment;
+            return commentRepository.save(comment);
         }).orElseThrow(ChannelNotFoundException::new);
     }
 
