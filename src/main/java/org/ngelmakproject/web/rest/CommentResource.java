@@ -65,7 +65,7 @@ public class CommentResource {
      */
     @PostMapping("")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<Comment> createComment(@RequestPart Comment comment,
+    public ResponseEntity<CommentDTO> createComment(@RequestPart Comment comment,
             @RequestPart(required = false) Optional<MultipartFile> media)
             throws URISyntaxException, MalformedURLException {
         log.info("REST request to save Comment : {} + {}x media", comment, media.map(e -> 1).orElse(0));
@@ -76,7 +76,7 @@ public class CommentResource {
         return ResponseEntity.created(new URI("/api/comments/" + comment.getId()))
                 .headers(HeaderUtil.createEntityCreationAlert(applicationName, ENTITY_NAME,
                         comment.getId().toString()))
-                .body(comment);
+                .body(CommentDTO.from(comment));
     }
 
     /**
@@ -92,7 +92,7 @@ public class CommentResource {
      */
     @PutMapping("")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<Comment> updateComment(
+    public ResponseEntity<CommentDTO> updateComment(
             @RequestPart Comment comment,
             @RequestPart(required = false) Optional<File> deletedFile,
             @RequestPart(required = false) Optional<MultipartFile> media) throws URISyntaxException {
@@ -107,7 +107,7 @@ public class CommentResource {
         return ResponseEntity.ok()
                 .headers(HeaderUtil.createEntityUpdateAlert(applicationName, ENTITY_NAME,
                         comment.getId().toString()))
-                .body(comment);
+                .body(CommentDTO.from(comment));
     }
 
     /**

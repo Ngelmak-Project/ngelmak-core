@@ -22,7 +22,7 @@ import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
 
 /**
- * The Notification entity.
+ * The Notification entity. Informs users about important events, updates, or alerts related to the application.
  */
 @Entity
 @Table(name = "nk_notification")
