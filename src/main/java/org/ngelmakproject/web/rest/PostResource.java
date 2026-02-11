@@ -64,7 +64,7 @@ public class PostResource {
      */
     @PostMapping("")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<Post> createPost(@RequestPart Post post,
+    public ResponseEntity<PostDTO> createPost(@RequestPart Post post,
             @RequestPart(required = false) Optional<List<MultipartFile>> _medias,
             @RequestPart(required = false) Optional<List<MultipartFile>> _covers)
             throws URISyntaxException {
@@ -75,10 +75,7 @@ public class PostResource {
             throw new BadRequestAlertException("A new post cannot already have an ID", ENTITY_NAME, "idexists");
         }
         post = postService.save(post, medias, covers);
-        return ResponseEntity.created(new URI("/api/posts/" + post.getId()))
-                .headers(HeaderUtil.createEntityCreationAlert(applicationName, ENTITY_NAME,
-                        post.getId().toString()))
-                .body(post);
+        return ResponseEntity.ok().body(PostDTO.from(post, null));
     }
 
     /**
@@ -96,7 +93,7 @@ public class PostResource {
      */
     @PutMapping("")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<Post> updatePost(
+    public ResponseEntity<PostDTO> updatePost(
             @RequestPart Post post,
             @RequestPart(required = false) Optional<List<File>> _deletedFiles,
             @RequestPart(required = false) Optional<List<MultipartFile>> _medias,
@@ -112,9 +109,7 @@ public class PostResource {
         }
         post = postService.update(post, deletedFiles, medias, covers);
         return ResponseEntity.ok()
-                .headers(
-                        HeaderUtil.createEntityUpdateAlert(applicationName, ENTITY_NAME, post.getId().toString()))
-                .body(post);
+                .body(PostDTO.from(post, null));
     }
 
     /**
