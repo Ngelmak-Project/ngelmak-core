@@ -55,7 +55,7 @@ cloud:
    ```bash
    vault kv put secret/thruline-core db-username=postgres db-password=supersecret jwt-secret=myjwtsecret
    ```
-4. Configure `VAULT_ROLE_ID` and `VAULT_SECRET_ID` in your environment.
+4. Configure `VAULT_ROLE_ID` and `VAULT_SECRET_ID` in the environment.
 
 For details please check out [Ngelmak-Vault](https://github.com/Ngelmak-Project/ngelmak-vault) repository. 
 
@@ -106,7 +106,7 @@ docker build -t ngelmak-thruline-core .
 docker run -p 4005:4005 ngelmak-thruline-core
 ```
 
-This way, your final image is **lightweight** (only contains JDK + compiled JAR) while the heavy Maven build tools stay in the builder stage.
+This way, the final image is **lightweight** (only contains JDK + compiled JAR) while the heavy Maven build tools stay in the builder stage.
 
 ---
 
