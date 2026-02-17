@@ -75,24 +75,6 @@ public class Channel implements Serializable {
     private Instant deletedAt;
 
     /**
-     * a ticket could be also related to a an channel.
-     */
-    @OneToMany(fetch = FetchType.LAZY, mappedBy = "channelRelated")
-    @JsonIgnore
-    private Set<Ticket> reports = new HashSet<>();
-
-    /**
-     * must be is issued by a user channel.
-     */
-    @OneToMany(fetch = FetchType.LAZY, mappedBy = "issuedby")
-    @JsonIgnore
-    private Set<Ticket> owners = new HashSet<>();
-
-    @OneToMany(fetch = FetchType.LAZY, mappedBy = "channel")
-    @JsonIgnore
-    private Set<Comment> comments = new HashSet<>();
-
-    /**
      * any user can subscribe to any other user's channel which my eventually have
      * any subscriber
      */
@@ -103,17 +85,6 @@ public class Channel implements Serializable {
     @OneToMany(fetch = FetchType.LAZY, mappedBy = "following")
     @JsonIgnore
     private Set<Membership> subscriptions = new HashSet<>();
-
-    @OneToMany(fetch = FetchType.LAZY, mappedBy = "channel")
-    @JsonIgnore
-    private Set<Post> posts = new HashSet<>();
-
-    /**
-     * a review is done by a user
-     */
-    @OneToMany(fetch = FetchType.LAZY, mappedBy = "channel")
-    @JsonIgnore
-    private Set<Review> reviews = new HashSet<>();
 
     public Long getId() {
         return id;
@@ -187,30 +158,6 @@ public class Channel implements Serializable {
         this.deletedAt = deletedAt;
     }
 
-    public Set<Ticket> getReports() {
-        return reports;
-    }
-
-    public void setReports(Set<Ticket> reports) {
-        this.reports = reports;
-    }
-
-    public Set<Ticket> getOwners() {
-        return owners;
-    }
-
-    public void setOwners(Set<Ticket> owners) {
-        this.owners = owners;
-    }
-
-    public Set<Comment> getComments() {
-        return comments;
-    }
-
-    public void setComments(Set<Comment> comments) {
-        this.comments = comments;
-    }
-
     public Set<Membership> getMemberships() {
         return memberships;
     }
@@ -227,20 +174,12 @@ public class Channel implements Serializable {
         this.subscriptions = subscriptions;
     }
 
-    public Set<Post> getPosts() {
-        return posts;
-    }
-
-    public void setPosts(Set<Post> posts) {
-        this.posts = posts;
-    }
-
-    public Set<Review> getReviews() {
-        return reviews;
-    }
-
-    public void setReviews(Set<Review> reviews) {
-        this.reviews = reviews;
+    @Override
+    public String toString() {
+        return "Channel [id=" + id + ", user=" + user + ", identifier=" + identifier + ", name=" + name
+                + ", description=" + description + ", avatar=" + avatar + ", banner=" + banner + ", createdAt="
+                + createdAt + ", deletedAt=" + deletedAt + ", memberships=" + memberships + ", subscriptions="
+                + subscriptions + "]";
     }
 
 }

@@ -64,12 +64,9 @@ public class Review implements Serializable {
     private Channel channel;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JsonIgnoreProperties(value = { "reviews", "postRelated", "commentRelated", "channelRelated",
-            "issuedby" }, allowSetters = true)
     private Ticket ticket;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JsonIgnoreProperties(value = { "reviews", "channel", "ticket", "replyto" }, allowSetters = true)
     private Review replyto;
 
     /**
