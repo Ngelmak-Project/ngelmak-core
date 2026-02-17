@@ -77,7 +77,6 @@ public class Ticket implements Serializable {
     private Long issuedBy;
 
     /* User (auth-service) that handled the ticket */
-    @NotNull
     @Column(name = "handled_by_id")
     private Long handledBy;
 
