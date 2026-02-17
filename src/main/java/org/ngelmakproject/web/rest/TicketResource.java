@@ -1,6 +1,5 @@
 package org.ngelmakproject.web.rest;
 
-import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Optional;
@@ -29,8 +28,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-import jakarta.validation.Valid;
-
 /**
  * REST controller for managing {@link org.ngelmakproject.domain.Ticket}.
  */
@@ -55,23 +52,21 @@ public class TicketResource {
      * {@code POST  /tickets} : Create a new ticket.
      *
      * @param ticket the ticket to create.
-     * @param media evidence of the issue.
+     * @param media  evidence of the issue.
      * @return the {@link ResponseEntity} with status {@code 201 (Created)} and with
      *         body the new ticket, or with status {@code 400 (Bad Request)} if the
      *         ticket has already an ID.
      * @throws URISyntaxException if the Location URI syntax is incorrect.
      */
     @PostMapping("")
-    public ResponseEntity<Ticket> createTicket(@Valid @RequestBody Ticket ticket,
-            @RequestPart(name = "media", required = false) Optional<MultipartFile> media) throws URISyntaxException {
+    public ResponseEntity<Ticket> createTicket(@RequestBody Ticket ticket,
+            @RequestPart(name = "media", required = false) Optional<MultipartFile> media) {
         log.info("REST request to save Ticket : {} + {}x media", ticket, media.map(e -> 1).orElse(0));
-
         if (ticket.getId() != null) {
             throw new BadRequestAlertException("A new ticket cannot already have an ID", ENTITY_NAME, "idexists");
         }
         ticket = ticketService.save(ticket, media);
-        return ResponseEntity.created(new URI("/api/tickets/" + ticket.getId()))
-                .headers(HeaderUtil.createEntityCreationAlert(applicationName, ENTITY_NAME, ticket.getId().toString()))
+        return ResponseEntity.ok()
                 .body(ticket);
     }
 
