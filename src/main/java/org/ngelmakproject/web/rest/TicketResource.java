@@ -21,7 +21,6 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
@@ -59,7 +58,7 @@ public class TicketResource {
      * @throws URISyntaxException if the Location URI syntax is incorrect.
      */
     @PostMapping("")
-    public ResponseEntity<Ticket> createTicket(@RequestBody Ticket ticket,
+    public ResponseEntity<Ticket> createTicket(@RequestPart(name = "ticket", required = true) Ticket ticket,
             @RequestPart(name = "media", required = false) Optional<MultipartFile> media) {
         log.info("REST request to save Ticket : {} + {}x media", ticket, media.map(e -> 1).orElse(0));
         if (ticket.getId() != null) {
