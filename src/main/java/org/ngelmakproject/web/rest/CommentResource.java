@@ -66,7 +66,7 @@ public class CommentResource {
     @PostMapping("")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<CommentDTO> createComment(@RequestPart Comment comment,
-            @RequestPart(required = false) Optional<MultipartFile> media)
+            @RequestPart(required = false, name = "media") Optional<MultipartFile> media)
             throws URISyntaxException, MalformedURLException {
         log.info("REST request to save Comment : {} + {}x media", comment, media.map(e -> 1).orElse(0));
         if (comment.getId() != null) {

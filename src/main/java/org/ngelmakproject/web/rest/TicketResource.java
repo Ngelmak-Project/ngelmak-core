@@ -63,7 +63,7 @@ public class TicketResource {
      */
     @PostMapping("")
     public ResponseEntity<Ticket> createTicket(@Valid @RequestBody Ticket ticket,
-            @RequestPart(required = false) Optional<MultipartFile> media) throws URISyntaxException {
+            @RequestPart(name = "media", required = false) Optional<MultipartFile> media) throws URISyntaxException {
         log.info("REST request to save Ticket : {} + {}x media", ticket, media.map(e -> 1).orElse(0));
 
         if (ticket.getId() != null) {
