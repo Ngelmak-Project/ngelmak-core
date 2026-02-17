@@ -4,12 +4,10 @@ import java.net.URISyntaxException;
 import java.util.Optional;
 
 import org.ngelmakproject.domain.Channel;
-import org.ngelmakproject.security.UserPrincipal;
 import org.ngelmakproject.service.ChannelService;
 import org.ngelmakproject.web.rest.dto.ChannelDTO;
 import org.ngelmakproject.web.rest.dto.PageDTO;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
-import org.ngelmakproject.web.rest.errors.UnauthorizedResourceAccessException;
 import org.ngelmakproject.web.rest.util.HeaderUtil;
 import org.ngelmakproject.web.rest.util.ResponseUtil;
 import org.slf4j.Logger;
@@ -78,11 +76,6 @@ public class ChannelResource {
         if (channel.getId() != null) {
             throw new BadRequestAlertException("A new channel cannot already have an ID", ENTITY_NAME, "idexists");
         }
-        UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
-        if (channel.getUser() != null && channel.getUser() != principal.getUserId()) {
-            throw new UnauthorizedResourceAccessException(principal.getUserId(), channel.getId(), ENTITY_NAME);
-        }
-        channel.setUser(principal.getUserId());
         var newChannel = channelService.save(channel);
         return ResponseEntity.ok()
                 .headers(HeaderUtil.createEntityCreationAlert(applicationName, ENTITY_NAME,
@@ -142,8 +135,6 @@ public class ChannelResource {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Channel> personalChannel(Authentication authentication) {
         log.info("REST request to get connected Channel");
-        UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
-        log.info("​🦋 User details {}", principal);
         Optional<Channel> channel = channelService.findOneByCurrentUser();
         return ResponseUtil.wrapOrNotFound(channel);
     }

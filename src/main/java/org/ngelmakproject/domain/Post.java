@@ -5,9 +5,6 @@ import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
 
-import org.ngelmakproject.domain.enumeration.Status;
-import org.ngelmakproject.domain.enumeration.Visibility;
-
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIncludeProperties;
 
@@ -24,7 +21,6 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToMany;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
@@ -87,22 +83,39 @@ public class Post implements Serializable {
                     @JoinColumn(name = "file_id", referencedColumnName = "id") })
     private Set<File> files = new HashSet<>();
 
-    /**
-     * a post can be signal as going against our policies.
-     */
-    @OneToMany(mappedBy = "postRelated")
-    @JsonIgnore
-    private Set<Ticket> reports = new HashSet<>();
-
-    @OneToMany(fetch = FetchType.LAZY, mappedBy = "post")
-    @JsonIncludeProperties(value = { "id" })
-    private Set<Comment> comments = new HashSet<>();
-
     @Column(name = "comment_count")
     private Integer commentCount = 0;
 
-    @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<Reaction> reactions = new HashSet<>();
+    /**
+     * The Status enumeration.
+     */
+    public enum Status {
+        PENDING,
+        REJECTED,
+        VALIDATED,
+        SUSPENDED,
+        DELETING,
+        NOT_QUALIFIED,
+    }
+
+    /**
+     * The Visibility enumeration.
+     */
+    public enum Visibility {
+        PUBLIC,
+        PRIVATE,
+    }
+
+    /**
+     * The Subject enumeration.
+     */
+    public enum Subject {
+        OPEN_LETTER,
+        CRITIC,
+        OPINION,
+        SUGGESTION,
+        IDEA,
+    }
 
     public Long getId() {
         return this.id;
@@ -218,68 +231,6 @@ public class Post implements Serializable {
 
     public Post files(Set<File> files) {
         this.setFiles(files);
-        return this;
-    }
-
-    public Set<Ticket> getReports() {
-        return this.reports;
-    }
-
-    public void setReports(Set<Ticket> tickets) {
-        if (this.reports != null) {
-            this.reports.forEach(i -> i.setPostRelated(null));
-        }
-        if (tickets != null) {
-            tickets.forEach(i -> i.setPostRelated(this));
-        }
-        this.reports = tickets;
-    }
-
-    public Post reports(Set<Ticket> tickets) {
-        this.setReports(tickets);
-        return this;
-    }
-
-    public Post addReports(Ticket ticket) {
-        this.reports.add(ticket);
-        ticket.setPostRelated(this);
-        return this;
-    }
-
-    public Post removeReports(Ticket ticket) {
-        this.reports.remove(ticket);
-        ticket.setPostRelated(null);
-        return this;
-    }
-
-    public Set<Comment> getComments() {
-        return this.comments;
-    }
-
-    public void setComments(Set<Comment> comments) {
-        if (this.comments != null) {
-            this.comments.forEach(i -> i.setPost(null));
-        }
-        if (comments != null) {
-            comments.forEach(i -> i.setPost(this));
-        }
-        this.comments = comments;
-    }
-
-    public Post comments(Set<Comment> comments) {
-        this.setComments(comments);
-        return this;
-    }
-
-    public Post addComment(Comment comment) {
-        this.comments.add(comment);
-        comment.setPost(this);
-        return this;
-    }
-
-    public Post removeComment(Comment comment) {
-        this.comments.remove(comment);
-        comment.setPost(null);
         return this;
     }
 

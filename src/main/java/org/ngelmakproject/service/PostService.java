@@ -10,16 +10,16 @@ import java.util.stream.Collectors;
 import org.ngelmakproject.domain.Channel;
 import org.ngelmakproject.domain.File;
 import org.ngelmakproject.domain.Post;
+import org.ngelmakproject.domain.Post.Status;
+import org.ngelmakproject.domain.Post.Visibility;
 import org.ngelmakproject.domain.Reaction;
-import org.ngelmakproject.domain.enumeration.Status;
-import org.ngelmakproject.domain.enumeration.Visibility;
 import org.ngelmakproject.repository.PostRepository;
 import org.ngelmakproject.repository.ReactionRepository;
 import org.ngelmakproject.web.rest.dto.PageDTO;
 import org.ngelmakproject.web.rest.dto.PostDTO;
 import org.ngelmakproject.web.rest.dto.ReactionSummaryDTO;
-import org.ngelmakproject.web.rest.errors.ChannelNotFoundException;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
+import org.ngelmakproject.web.rest.errors.ChannelNotFoundException;
 import org.ngelmakproject.web.rest.errors.ResourceNotFoundException;
 import org.ngelmakproject.web.rest.errors.UnauthorizedResourceAccessException;
 import org.slf4j.Logger;
@@ -257,6 +257,14 @@ public class PostService {
                 .collect(Collectors.toList());
         Page<Post> page = new PageImpl<>(posts, pageable, posts.size());
         return PageDTO.from(page);
+    }
+
+    public List<PostDTO> getRecommendedPost() {
+        log.debug("Request to get recommended Posts as DTO");
+        Channel channel = channelService.findOneByCurrentUser().orElseThrow(ChannelNotFoundException::new);
+        List<Post> posts = postRepository.findByStatusOrderByAtDesc(Status.VALIDATED, Pageable.unpaged())
+                .getContent();
+        return filloutReactions(posts, channel.getId());
     }
 
     /**

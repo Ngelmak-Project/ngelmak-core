@@ -5,14 +5,11 @@ import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
 
-import org.ngelmakproject.domain.enumeration.TicketType;
-
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonIncludeProperties;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -22,7 +19,6 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
 
 /**
  * A Ticket.
@@ -40,28 +36,20 @@ public class Ticket implements Serializable {
     @Column(name = "id")
     private Long id;
 
-    /**
-     * main title of the ticket
-     */
     @NotNull
-    @Size(min = 50, max = 200)
-    @Column(name = "object", length = 200, nullable = false)
-    private String object;
+    @Column(name = "issued_at", nullable = false)
+    private Instant issuedAt = Instant.now();
 
-    @NotNull
-    @Enumerated(EnumType.STRING)
-    @Column(name = "type", nullable = false)
-    private TicketType type;
+    @Column(name = "resolved")
+    private Boolean resolved;
 
     @NotNull
-    @Column(name = "at", nullable = false)
-    private Instant at;
+    @Column(name = "description", length = 1000, nullable = false)
+    private String description;
 
-    @Column(name = "closed")
-    private Boolean closed;
-
-    @Column(name = "content")
-    private String content;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JsonIncludeProperties(value = { "id", "url" })
+    private File evidence;
 
     /**
      * a review is either related to a ticket or is a reply to another review.
@@ -72,210 +60,132 @@ public class Ticket implements Serializable {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JsonIgnoreProperties(value = { "attachments", "reports", "comments", "channel" }, allowSetters = true)
-    private Post postRelated;
+    private Post post;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JsonIgnoreProperties(value = { "reports", "comments", "post", "replayto", "channel" }, allowSetters = true)
-    private Comment commentRelated;
+    private Comment comment;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JsonIgnoreProperties(value = { "configuration", "user", "reports", "owners", "comments", "memberships",
             "subscriptions", "posts", "reviews" }, allowSetters = true)
-    private Channel channelRelated;
+    private Channel channel;
 
-    @ManyToOne(optional = false)
+    /* User (auth-service) that issued the ticket */
     @NotNull
-    @JsonIgnoreProperties(value = { "configuration", "user", "reports", "owners", "comments", "memberships",
-            "subscriptions", "posts", "reviews" }, allowSetters = true)
-    private Channel issuedby;
+    @Column(name = "issued_by_id", nullable = false)
+    private Long issuedBy;
+
+    /* User (auth-service) that handled the ticket */
+    @NotNull
+    @Column(name = "handled_by_id", nullable = false)
+    private Long handledBy;
+
+    /* User (auth-service) responsible for handling the ticket */
+    @Column(name = "assigned_to_id", nullable = true)
+    private Long assignedTo;
 
     public Long getId() {
-        return this.id;
-    }
-
-    public Ticket id(Long id) {
-        this.setId(id);
-        return this;
+        return id;
     }
 
     public void setId(Long id) {
         this.id = id;
     }
 
-    public String getObject() {
-        return this.object;
+    public Instant getIssuedAt() {
+        return issuedAt;
     }
 
-    public Ticket object(String object) {
-        this.setObject(object);
-        return this;
+    public void setIssuedAt(Instant issuedAt) {
+        this.issuedAt = issuedAt;
     }
 
-    public void setObject(String object) {
-        this.object = object;
+    public Boolean getResolved() {
+        return resolved;
     }
 
-    public TicketType getType() {
-        return this.type;
+    public void setResolved(Boolean resolved) {
+        this.resolved = resolved;
     }
 
-    public Ticket type(TicketType type) {
-        this.setType(type);
-        return this;
+    public String getDescription() {
+        return description;
     }
 
-    public void setType(TicketType type) {
-        this.type = type;
+    public void setDescription(String description) {
+        this.description = description;
     }
 
-    public Instant getAt() {
-        return this.at;
+    public File getEvidence() {
+        return evidence;
     }
 
-    public Ticket at(Instant at) {
-        this.setAt(at);
-        return this;
-    }
-
-    public void setAt(Instant at) {
-        this.at = at;
-    }
-
-    public Boolean getClosed() {
-        return this.closed;
-    }
-
-    public Ticket closed(Boolean closed) {
-        this.setClosed(closed);
-        return this;
-    }
-
-    public void setClosed(Boolean closed) {
-        this.closed = closed;
-    }
-
-    public String getContent() {
-        return this.content;
-    }
-
-    public Ticket content(String content) {
-        this.setContent(content);
-        return this;
-    }
-
-    public void setContent(String content) {
-        this.content = content;
+    public void setEvidence(File evidence) {
+        this.evidence = evidence;
     }
 
     public Set<Review> getReviews() {
-        return this.reviews;
+        return reviews;
     }
 
     public void setReviews(Set<Review> reviews) {
-        if (this.reviews != null) {
-            this.reviews.forEach(i -> i.setTicket(null));
-        }
-        if (reviews != null) {
-            reviews.forEach(i -> i.setTicket(this));
-        }
         this.reviews = reviews;
     }
 
-    public Ticket reviews(Set<Review> reviews) {
-        this.setReviews(reviews);
-        return this;
+    public Post getPost() {
+        return post;
     }
 
-    public Ticket addReview(Review review) {
-        this.reviews.add(review);
-        review.setTicket(this);
-        return this;
+    public void setPost(Post post) {
+        this.post = post;
     }
 
-    public Ticket removeReview(Review review) {
-        this.reviews.remove(review);
-        review.setTicket(null);
-        return this;
+    public Comment getComment() {
+        return comment;
     }
 
-    public Post getPostRelated() {
-        return this.postRelated;
+    public void setComment(Comment comment) {
+        this.comment = comment;
     }
 
-    public void setPostRelated(Post post) {
-        this.postRelated = post;
+    public Channel getChannel() {
+        return channel;
     }
 
-    public Ticket postRelated(Post post) {
-        this.setPostRelated(post);
-        return this;
+    public void setChannel(Channel channel) {
+        this.channel = channel;
     }
 
-    public Comment getCommentRelated() {
-        return this.commentRelated;
+    public Long getIssuedBy() {
+        return issuedBy;
     }
 
-    public void setCommentRelated(Comment comment) {
-        this.commentRelated = comment;
+    public void setIssuedBy(Long issuedBy) {
+        this.issuedBy = issuedBy;
     }
 
-    public Ticket commentRelated(Comment comment) {
-        this.setCommentRelated(comment);
-        return this;
+    public Long getHandledBy() {
+        return handledBy;
     }
 
-    public Channel getChannelRelated() {
-        return this.channelRelated;
+    public void setHandledBy(Long handledBy) {
+        this.handledBy = handledBy;
     }
 
-    public void setChannelRelated(Channel nkChannel) {
-        this.channelRelated = nkChannel;
+    public Long getAssignedTo() {
+        return assignedTo;
     }
 
-    public Ticket channelRelated(Channel nkChannel) {
-        this.setChannelRelated(nkChannel);
-        return this;
+    public void setAssignedTo(Long assignedTo) {
+        this.assignedTo = assignedTo;
     }
 
-    public Channel getIssuedby() {
-        return this.issuedby;
-    }
-
-    public void setIssuedby(Channel nkChannel) {
-        this.issuedby = nkChannel;
-    }
-
-    public Ticket issuedby(Channel nkChannel) {
-        this.setIssuedby(nkChannel);
-        return this;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (!(o instanceof Ticket)) {
-            return false;
-        }
-        return getId() != null && getId().equals(((Ticket) o).getId());
-    }
-
-    @Override
-    public int hashCode() {
-        return getClass().hashCode();
-    }
-
-    // prettier-ignore
     @Override
     public String toString() {
-        return "Ticket{" +
-                "id=" + getId() +
-                ", object='" + getObject() + "'" +
-                ", type='" + getType() + "'" +
-                ", at='" + getAt() + "'" +
-                ", closed='" + getClosed() + "'" +
-                ", content='" + getContent() + "'" +
-                "}";
+        return "Ticket [id=" + id + ", issuedAt=" + issuedAt + ", resolved=" + resolved + ", description=" + description
+                + ", evidence=" + evidence + ", reviews=" + reviews + ", post=" + post + ", comment=" + comment
+                + ", channel=" + channel + ", issuedBy=" + issuedBy + ", handledBy=" + handledBy + ", assignedTo="
+                + assignedTo + "]";
     }
 }

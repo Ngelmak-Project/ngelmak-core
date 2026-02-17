@@ -5,8 +5,6 @@ import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
 
-import org.ngelmakproject.domain.enumeration.Status;
-
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import jakarta.persistence.Column;
@@ -73,6 +71,18 @@ public class Review implements Serializable {
     @ManyToOne(fetch = FetchType.LAZY)
     @JsonIgnoreProperties(value = { "reviews", "channel", "ticket", "replyto" }, allowSetters = true)
     private Review replyto;
+
+    /**
+     * The Status enumeration.
+     */
+    public enum Status {
+        PENDING,
+        REJECTED,
+        VALIDATED,
+        SUSPENDED,
+        DELETING,
+        NOT_QUALIFIED,
+    }
 
     public Long getId() {
         return this.id;

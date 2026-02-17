@@ -5,10 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.ngelmakproject.domain.Comment;
-import org.ngelmakproject.domain.Post;
-import org.ngelmakproject.domain.enumeration.Status;
 import org.ngelmakproject.repository.projection.CommentProjection;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.EntityGraph;

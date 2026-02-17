@@ -8,16 +8,14 @@ import org.ngelmakproject.domain.Channel;
 import org.ngelmakproject.domain.Membership;
 import org.ngelmakproject.repository.ChannelRepository;
 import org.ngelmakproject.repository.MembershipRepository;
-import org.ngelmakproject.security.UserPrincipal;
+import org.ngelmakproject.security.UserService;
 import org.ngelmakproject.web.rest.dto.ChannelDTO;
 import org.ngelmakproject.web.rest.errors.ChannelNotFoundException;
+import org.ngelmakproject.web.rest.errors.UnauthorizedResourceAccessException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.authentication.AnonymousAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -31,6 +29,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class ChannelService {
 
     private static final Logger log = LoggerFactory.getLogger(ChannelService.class);
+    private static final String ENTITY_NAME = "channel";
 
     private final ChannelRepository channelRepository;
     private final MembershipRepository membershipRepository;
@@ -52,7 +51,16 @@ public class ChannelService {
      */
     public Channel save(Channel channel) {
         log.info("Request to save Channel : {}", channel);
-        /* 1. channel creation */
+
+        /*
+         * 1. Set the currently authenticated user as the owner of the channel to be
+         * created.
+         */
+        // Retrieve ID of the user if authenticated or throught exception
+        Long userId = UserService.getAuthenticatedUser().map(user -> user.id())
+                .orElseThrow(() -> new UnauthorizedResourceAccessException(channel.getId(), ENTITY_NAME));
+        channel.setUser(userId);
+        /* 2. channel creation */
         String identifier = channel.getName().toLowerCase().trim()
                 .replaceAll("[^a-z0-9]+", "-") // replace groups of non-alphanumerics
                 .replaceAll("^-|-$", ""); // remove leading/trailing hyphens
@@ -87,9 +95,6 @@ public class ChannelService {
             }
             if (channel.getBanner() != null) {
                 existingChannel.setBanner(channel.getBanner());
-            }
-            if (channel.getVisibility() != null) {
-                existingChannel.setVisibility(channel.getVisibility());
             }
             if (channel.getCreatedAt() != null) {
                 existingChannel.setCreatedAt(channel.getCreatedAt());
@@ -143,23 +148,10 @@ public class ChannelService {
      */
     @Transactional(readOnly = true)
     public Optional<Channel> findOneByCurrentUser() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        // No authentication available
-        if (authentication == null) {
-            return Optional.empty();
-        }
-        // Anonymous or not authenticated
-        if (!authentication.isAuthenticated()
-                || authentication instanceof AnonymousAuthenticationToken) {
-            return Optional.empty();
-        }
-        Object principal = authentication.getPrincipal();
-        // Principal is not your expected custom user type
-        if (!(principal instanceof UserPrincipal userPrincipal)) {
-            return Optional.empty();
-        }
-        // [TODO] Save the channel if exists into cache.
-        return channelRepository.findOneByUser(userPrincipal.getUserId());
+        return UserService.getAuthenticatedUser().map(user -> {
+            // [TODO] Save the channel if exists into cache.
+            return channelRepository.findOneByUser(user.id());
+        }).orElse(Optional.empty());
     }
 
     /**
@@ -187,7 +179,7 @@ public class ChannelService {
      */
     public Channel updateAvatar(MultipartFile media) {
         return this.findOneByCurrentUser().map(
-            channel -> {
+                channel -> {
                     log.info("Request to update Channel avatar : {}", channel);
                     String deletedAvatarUrl = channel.getAvatar();
                     var file = fileService.save(List.of(media)).get(0);

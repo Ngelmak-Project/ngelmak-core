@@ -3,11 +3,9 @@ package org.ngelmakproject.web.rest;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 
 import org.ngelmakproject.domain.Ticket;
-import org.ngelmakproject.repository.TicketRepository;
 import org.ngelmakproject.service.TicketService;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
 import org.ngelmakproject.web.rest.util.HeaderUtil;
@@ -22,17 +20,16 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotNull;
 
 /**
  * REST controller for managing {@link org.ngelmakproject.domain.Ticket}.
@@ -50,103 +47,32 @@ public class TicketResource {
 
     private final TicketService ticketService;
 
-    private final TicketRepository ticketRepository;
-
-    public TicketResource(TicketService ticketService, TicketRepository ticketRepository) {
+    public TicketResource(TicketService ticketService) {
         this.ticketService = ticketService;
-        this.ticketRepository = ticketRepository;
     }
 
     /**
      * {@code POST  /tickets} : Create a new ticket.
      *
      * @param ticket the ticket to create.
+     * @param media evidence of the issue.
      * @return the {@link ResponseEntity} with status {@code 201 (Created)} and with
      *         body the new ticket, or with status {@code 400 (Bad Request)} if the
      *         ticket has already an ID.
      * @throws URISyntaxException if the Location URI syntax is incorrect.
      */
     @PostMapping("")
-    public ResponseEntity<Ticket> createTicket(@Valid @RequestBody Ticket ticket) throws URISyntaxException {
-        log.debug("REST request to save Ticket : {}", ticket);
+    public ResponseEntity<Ticket> createTicket(@Valid @RequestBody Ticket ticket,
+            @RequestPart(required = false) Optional<MultipartFile> media) throws URISyntaxException {
+        log.info("REST request to save Ticket : {} + {}x media", ticket, media.map(e -> 1).orElse(0));
+
         if (ticket.getId() != null) {
             throw new BadRequestAlertException("A new ticket cannot already have an ID", ENTITY_NAME, "idexists");
         }
-        ticket = ticketService.save(ticket);
+        ticket = ticketService.save(ticket, media);
         return ResponseEntity.created(new URI("/api/tickets/" + ticket.getId()))
                 .headers(HeaderUtil.createEntityCreationAlert(applicationName, ENTITY_NAME, ticket.getId().toString()))
                 .body(ticket);
-    }
-
-    /**
-     * {@code PUT  /tickets/:id} : Updates an existing ticket.
-     *
-     * @param id     the id of the ticket to save.
-     * @param ticket the ticket to update.
-     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body
-     *         the updated ticket,
-     *         or with status {@code 400 (Bad Request)} if the ticket is not valid,
-     *         or with status {@code 500 (Internal Server Error)} if the ticket
-     *         couldn't be updated.
-     * @throws URISyntaxException if the Location URI syntax is incorrect.
-     */
-    @PutMapping("/{id}")
-    public ResponseEntity<Ticket> updateTicket(
-            @PathVariable(value = "id", required = false) final Long id,
-            @Valid @RequestBody Ticket ticket) throws URISyntaxException {
-        log.debug("REST request to update Ticket : {}, {}", id, ticket);
-        if (ticket.getId() == null) {
-            throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
-        }
-        if (!Objects.equals(id, ticket.getId())) {
-            throw new BadRequestAlertException("Invalid ID", ENTITY_NAME, "idinvalid");
-        }
-
-        if (!ticketRepository.existsById(id)) {
-            throw new BadRequestAlertException("Entity not found", ENTITY_NAME, "idnotfound");
-        }
-
-        ticket = ticketService.update(ticket);
-        return ResponseEntity.ok()
-                .headers(HeaderUtil.createEntityUpdateAlert(applicationName, ENTITY_NAME, ticket.getId().toString()))
-                .body(ticket);
-    }
-
-    /**
-     * {@code PATCH  /tickets/:id} : Partial updates given fields of an existing
-     * ticket, field will ignore if it is null
-     *
-     * @param id     the id of the ticket to save.
-     * @param ticket the ticket to update.
-     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body
-     *         the updated ticket,
-     *         or with status {@code 400 (Bad Request)} if the ticket is not valid,
-     *         or with status {@code 404 (Not Found)} if the ticket is not found,
-     *         or with status {@code 500 (Internal Server Error)} if the ticket
-     *         couldn't be updated.
-     * @throws URISyntaxException if the Location URI syntax is incorrect.
-     */
-    @PatchMapping(value = "/{id}", consumes = { "application/json", "application/merge-patch+json" })
-    public ResponseEntity<Ticket> partialUpdateTicket(
-            @PathVariable(value = "id", required = false) final Long id,
-            @NotNull @RequestBody Ticket ticket) throws URISyntaxException {
-        log.debug("REST request to partial update Ticket partially : {}, {}", id, ticket);
-        if (ticket.getId() == null) {
-            throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
-        }
-        if (!Objects.equals(id, ticket.getId())) {
-            throw new BadRequestAlertException("Invalid ID", ENTITY_NAME, "idinvalid");
-        }
-
-        if (!ticketRepository.existsById(id)) {
-            throw new BadRequestAlertException("Entity not found", ENTITY_NAME, "idnotfound");
-        }
-
-        Optional<Ticket> result = ticketService.partialUpdate(ticket);
-
-        return ResponseUtil.wrapOrNotFound(
-                result,
-                HeaderUtil.createEntityUpdateAlert(applicationName, ENTITY_NAME, ticket.getId().toString()));
     }
 
     /**

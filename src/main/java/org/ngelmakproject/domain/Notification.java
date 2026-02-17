@@ -3,8 +3,6 @@ package org.ngelmakproject.domain;
 import java.io.Serializable;
 import java.time.Instant;
 
-import org.ngelmakproject.domain.enumeration.NotificationType;
-
 import com.fasterxml.jackson.annotation.JsonIncludeProperties;
 
 import io.micrometer.common.lang.NonNull;
@@ -22,7 +20,8 @@ import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
 
 /**
- * The Notification entity. Informs users about important events, updates, or alerts related to the application.
+ * The Notification entity. Informs users about important events, updates, or
+ * alerts related to the application.
  */
 @Entity
 @Table(name = "nk_notification")
@@ -57,6 +56,18 @@ public class Notification implements Serializable {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JsonIncludeProperties(value = { "id", "url" })
     private File file;
+
+    /**
+     * The NotificationType enumeration.
+     */
+    public enum NotificationType {
+        PROJECT_NEWS, // For announcements about the evolution of Ngelmak platform.
+        FEATURE_UPDATE, // For new releases, improvements, or beta features.
+        MAINTENANCE, // Useful for scheduled downtime or technical operations.
+        COMMUNITY_ALERT, // Covers anything urgent or important that affects all users. (rules, safety,
+                         // etc.)
+        GEOPOLITICAL_INFO // Matches Ngelmak requirement for global context relevant to Ngelmak audience.
+    }
 
     public Long getId() {
         return id;

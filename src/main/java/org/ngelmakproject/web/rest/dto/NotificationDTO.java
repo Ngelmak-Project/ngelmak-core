@@ -2,7 +2,7 @@ package org.ngelmakproject.web.rest.dto;
 
 import java.time.Instant;
 
-import org.ngelmakproject.domain.enumeration.NotificationType;
+import org.ngelmakproject.domain.Notification.NotificationType;
 
 public record NotificationDTO(
 		Long id,

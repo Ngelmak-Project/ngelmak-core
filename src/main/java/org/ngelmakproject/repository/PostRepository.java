@@ -4,7 +4,7 @@ import java.util.Optional;
 
 import org.ngelmakproject.domain.Channel;
 import org.ngelmakproject.domain.Post;
-import org.ngelmakproject.domain.enumeration.Status;
+import org.ngelmakproject.domain.Post.Status;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.EntityGraph;

@@ -5,8 +5,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.ngelmakproject.domain.Post;
-import org.ngelmakproject.domain.enumeration.Status;
-import org.ngelmakproject.domain.enumeration.Visibility;
+import org.ngelmakproject.domain.Post.Status;
+import org.ngelmakproject.domain.Post.Visibility;
 
 public record PostDTO(
         Long id,
