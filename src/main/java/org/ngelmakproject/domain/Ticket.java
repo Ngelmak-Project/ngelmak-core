@@ -47,7 +47,7 @@ public class Ticket implements Serializable {
     @Column(name = "description", length = 1000, nullable = false)
     private String description;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JsonIncludeProperties(value = { "id", "url" })
     private File evidence;
 
@@ -78,11 +78,11 @@ public class Ticket implements Serializable {
 
     /* User (auth-service) that handled the ticket */
     @NotNull
-    @Column(name = "handled_by_id", nullable = false)
+    @Column(name = "handled_by_id")
     private Long handledBy;
 
     /* User (auth-service) responsible for handling the ticket */
-    @Column(name = "assigned_to_id", nullable = true)
+    @Column(name = "assigned_to_id")
     private Long assignedTo;
 
     public Long getId() {
