@@ -10,6 +10,7 @@ import org.ngelmakproject.domain.Ticket;
 import org.ngelmakproject.repository.TicketRepository;
 import org.ngelmakproject.security.UserService;
 import org.ngelmakproject.security.UserService.UserPrincipal;
+import org.ngelmakproject.web.rest.dto.TicketDTO;
 import org.ngelmakproject.web.rest.errors.UnauthorizedResourceAccessException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,6 +58,7 @@ public class TicketService {
             ticket.setEvidence(files.get(0));
         }
         ticket.setIssuedAt(Instant.now());
+        ticket.setResolved(false);
         return ticketRepository.save(ticket);
     }
 
@@ -79,9 +81,9 @@ public class TicketService {
      * @return the entity.
      */
     @Transactional(readOnly = true)
-    public Optional<Ticket> findOne(Long id) {
+    public Optional<TicketDTO> findOne(Long id) {
         log.debug("Request to get Ticket : {}", id);
-        return ticketRepository.findById(id);
+        return ticketRepository.findById(id).map(TicketDTO::from);
     }
 
     /**

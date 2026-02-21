@@ -134,9 +134,8 @@ public class ChannelResource {
     @GetMapping("/me")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Channel> personalChannel(Authentication authentication) {
-        log.info("REST request to get connected Channel");
-        Optional<Channel> channel = channelService.findOneByCurrentUser();
-        return ResponseUtil.wrapOrNotFound(channel);
+        log.debug("REST request to get connected Channel");
+        return ResponseUtil.wrapOrNotFound(channelService.findOneByCurrentUser());
     }
 
     /**

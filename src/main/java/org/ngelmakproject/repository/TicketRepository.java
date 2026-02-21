@@ -1,6 +1,9 @@
 package org.ngelmakproject.repository;
 
+import java.util.Optional;
+
 import org.ngelmakproject.domain.Ticket;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -10,4 +13,6 @@ import org.springframework.stereotype.Repository;
 @SuppressWarnings("unused")
 @Repository
 public interface TicketRepository extends JpaRepository<Ticket, Long> {
+  @EntityGraph(attributePaths = { "evidence", "post", "comment", "channel" })
+  Optional<Ticket> findById(Long id);
 }
