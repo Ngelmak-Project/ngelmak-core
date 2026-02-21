@@ -6,7 +6,6 @@ import java.util.Optional;
 import org.ngelmakproject.domain.Ticket;
 import org.ngelmakproject.service.TicketService;
 import org.ngelmakproject.web.rest.dto.PageDTO;
-import org.ngelmakproject.web.rest.dto.TicketDTO;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
 import org.ngelmakproject.web.rest.errors.UnauthorizedResourceAccessException;
 import org.ngelmakproject.web.rest.util.HeaderUtil;
@@ -93,9 +92,9 @@ public class TicketResource {
      *         the ticket, or with status {@code 404 (Not Found)}.
      */
     @GetMapping("/{id}")
-    public ResponseEntity<TicketDTO> getTicket(@PathVariable("id") Long id) {
+    public ResponseEntity<Ticket> getTicket(@PathVariable("id") Long id) {
         log.debug("REST request to get Ticket : {}", id);
-        Optional<TicketDTO> ticket = ticketService.findOne(id);
+        Optional<Ticket> ticket = ticketService.findOne(id);
         return ResponseUtil.wrapOrNotFound(ticket);
     }
 

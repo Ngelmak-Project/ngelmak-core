@@ -3,6 +3,9 @@ package org.ngelmakproject.domain;
 import java.io.Serializable;
 import java.time.Instant;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonIncludeProperties;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -42,15 +45,20 @@ public class Ticket implements Serializable {
     private String description;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JsonIncludeProperties(value = { "id", "url" })
     private File evidence;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JsonIgnoreProperties(value = { "attachments", "reports", "comments", "channel" }, allowSetters = true)
     private Post post;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JsonIgnoreProperties(value = { "reports", "comments", "post", "replayto", "channel" }, allowSetters = true)
     private Comment comment;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JsonIgnoreProperties(value = { "configuration", "user", "reports", "owners", "comments", "memberships",
+            "subscriptions", "posts", "reviews" }, allowSetters = true)
     private Channel channel;
 
     /* User (auth-service) that issued the ticket */
