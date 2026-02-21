@@ -161,4 +161,11 @@ public class Ticket implements Serializable {
     public void setAssignedTo(Long assignedTo) {
         this.assignedTo = assignedTo;
     }
+
+    @Override
+    public String toString() {
+        return "Ticket [id=" + id + ", issuedAt=" + issuedAt + ", resolved=" + resolved + ", description=" + description
+                + ", evidence=" + evidence + ", post=" + post + ", comment=" + comment + ", channel=" + channel
+                + ", issuedBy=" + issuedBy + ", handledBy=" + handledBy + ", assignedTo=" + assignedTo + "]";
+    }
 }
