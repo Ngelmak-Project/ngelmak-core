@@ -1,22 +1,22 @@
 package org.ngelmakproject.web.rest;
 
 import java.net.URISyntaxException;
-import java.util.List;
 import java.util.Optional;
 
 import org.ngelmakproject.domain.Ticket;
 import org.ngelmakproject.service.TicketService;
+import org.ngelmakproject.web.rest.dto.PageDTO;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
+import org.ngelmakproject.web.rest.errors.UnauthorizedResourceAccessException;
 import org.ngelmakproject.web.rest.util.HeaderUtil;
-import org.ngelmakproject.web.rest.util.PaginationUtil;
 import org.ngelmakproject.web.rest.util.ResponseUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,7 +25,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 /**
  * REST controller for managing {@link org.ngelmakproject.domain.Ticket}.
@@ -73,16 +72,16 @@ public class TicketResource {
      * {@code GET  /tickets} : get all the tickets.
      *
      * @param pageable the pagination information.
+     * @throws UnauthorizedResourceAccessException
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and the list
      *         of tickets in body.
      */
     @GetMapping("")
-    public ResponseEntity<List<Ticket>> getAllTickets(Pageable pageable) {
-        log.debug("REST request to get a page of Tickets");
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    public ResponseEntity<PageDTO<Ticket>> getAllTickets(Pageable pageable) {
+        log.info("REST request to get a page of Tickets");
         Page<Ticket> page = ticketService.findAll(pageable);
-        HttpHeaders headers = PaginationUtil.generatePaginationHttpHeaders(page,
-                ServletUriComponentsBuilder.fromCurrentRequest().toString());
-        return ResponseEntity.ok().headers(headers).body(page.getContent());
+        return ResponseEntity.ok().body(PageDTO.from(page));
     }
 
     /**
