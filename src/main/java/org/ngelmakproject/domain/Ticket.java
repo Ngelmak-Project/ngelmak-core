@@ -2,8 +2,6 @@ package org.ngelmakproject.domain;
 
 import java.io.Serializable;
 import java.time.Instant;
-import java.util.HashSet;
-import java.util.Set;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonIncludeProperties;
@@ -15,7 +13,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToMany;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
@@ -50,13 +47,6 @@ public class Ticket implements Serializable {
     @ManyToOne(fetch = FetchType.LAZY)
     @JsonIncludeProperties(value = { "id", "url" })
     private File evidence;
-
-    /**
-     * a review is either related to a ticket or is a reply to another review.
-     */
-    @OneToMany(fetch = FetchType.LAZY, mappedBy = "ticket")
-    @JsonIgnoreProperties(value = { "reviews", "channel", "ticket", "replyto" }, allowSetters = true)
-    private Set<Review> reviews = new HashSet<>();
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JsonIgnoreProperties(value = { "attachments", "reports", "comments", "channel" }, allowSetters = true)
@@ -124,14 +114,6 @@ public class Ticket implements Serializable {
         this.evidence = evidence;
     }
 
-    public Set<Review> getReviews() {
-        return reviews;
-    }
-
-    public void setReviews(Set<Review> reviews) {
-        this.reviews = reviews;
-    }
-
     public Post getPost() {
         return post;
     }
@@ -178,13 +160,5 @@ public class Ticket implements Serializable {
 
     public void setAssignedTo(Long assignedTo) {
         this.assignedTo = assignedTo;
-    }
-
-    @Override
-    public String toString() {
-        return "Ticket [id=" + id + ", issuedAt=" + issuedAt + ", resolved=" + resolved + ", description=" + description
-                + ", evidence=" + evidence + ", reviews=" + reviews + ", post=" + post + ", comment=" + comment
-                + ", channel=" + channel + ", issuedBy=" + issuedBy + ", handledBy=" + handledBy + ", assignedTo="
-                + assignedTo + "]";
     }
 }
