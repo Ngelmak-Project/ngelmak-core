@@ -13,6 +13,6 @@ import org.springframework.stereotype.Repository;
 @SuppressWarnings("unused")
 @Repository
 public interface TicketRepository extends JpaRepository<Ticket, Long> {
-  @EntityGraph(attributePaths = { "evidence", "post", "comment", "channel" })
+  @EntityGraph(attributePaths = { "evidence", "post.files", "comment.file", "channel" })
   Optional<Ticket> findById(Long id);
 }
