@@ -6,6 +6,7 @@ import java.util.Optional;
 import org.ngelmakproject.domain.Ticket;
 import org.ngelmakproject.service.TicketService;
 import org.ngelmakproject.web.rest.dto.PageDTO;
+import org.ngelmakproject.web.rest.dto.TicketDTO;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
 import org.ngelmakproject.web.rest.errors.UnauthorizedResourceAccessException;
 import org.ngelmakproject.web.rest.util.HeaderUtil;
@@ -57,15 +58,15 @@ public class TicketResource {
      * @throws URISyntaxException if the Location URI syntax is incorrect.
      */
     @PostMapping("")
-    public ResponseEntity<Ticket> createTicket(@RequestPart(name = "ticket", required = true) Ticket ticket,
+    public ResponseEntity<TicketDTO> createTicket(@RequestPart(name = "ticket", required = true) Ticket ticket,
             @RequestPart(name = "media", required = false) Optional<MultipartFile> media) {
         log.info("REST request to save Ticket : {} + {}x media", ticket, media.map(e -> 1).orElse(0));
         if (ticket.getId() != null) {
             throw new BadRequestAlertException("A new ticket cannot already have an ID", ENTITY_NAME, "idexists");
         }
-        ticket = ticketService.save(ticket, media);
+        ticket = ticketService.report(ticket, media);
         return ResponseEntity.ok()
-                .body(ticket);
+                .body(TicketDTO.from(ticket));
     }
 
     /**

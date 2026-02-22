@@ -2,10 +2,6 @@ package org.ngelmakproject.domain;
 
 import java.io.Serializable;
 import java.time.Instant;
-import java.util.HashSet;
-import java.util.Set;
-
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -15,8 +11,8 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToMany;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
@@ -37,196 +33,135 @@ public class Review implements Serializable {
     @Column(name = "id")
     private Long id;
 
+    // When the review was created
     @NotNull
-    @Column(name = "at", nullable = false)
-    private Instant at;
+    @Column(name = "created_at", nullable = false)
+    private Instant createdAt = Instant.now();
+
+    // When the review was last updated
+    @Column(name = "updated_at")
+    private Instant updatedAt;
+
+    // Review text or moderator note
+    @Column(name = "content", columnDefinition = "TEXT")
+    private String content;
+
+    // OPEN, CLOSED, PENDING, etc.
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private Status status;
+
+    // Deadline for moderators to act before notifications trigger
+    @Column(name = "due_at")
+    private Instant dueAt;
+
+    // The ticket being reviewed
+    @NotNull
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ticket_id", nullable = false)
+    private Ticket ticket;
+
+    // Threading: replies to previous reviews
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reply_to_id")
+    private Review replyTo;
+
+    // Who wrote this review entry (moderator or user)
+    @Column(name = "author_id")
+    private Long author;
 
     @NotNull
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
-    private Status status;
+    @Column(name = "visibility", nullable = false)
+    private Visibility visibility = Visibility.PUBLIC;
 
-    /**
-     * number of minutes to wait before timeout.
-     */
-    @NotNull
-    @Column(name = "timeout", nullable = false)
-    private Integer timeout;
-
-    @OneToMany(fetch = FetchType.LAZY, mappedBy = "replyto")
-    @JsonIgnoreProperties(value = { "reviews", "channel", "ticket", "replyto" }, allowSetters = true)
-    private Set<Review> reviews = new HashSet<>();
-
-    @ManyToOne(optional = false)
-    @NotNull
-    @JsonIgnoreProperties(value = { "configuration", "user", "reports", "owners", "comments", "memberships",
-            "subscriptions", "posts", "reviews" }, allowSetters = true)
-    private Channel channel;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    private Ticket ticket;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    private Review replyto;
-
-    /**
-     * The Status enumeration.
-     */
     public enum Status {
-        PENDING,
-        REJECTED,
-        VALIDATED,
-        SUSPENDED,
-        DELETING,
-        NOT_QUALIFIED,
+        OPEN, CLOSED, PENDING, NOT_QUALIFIED
+    }
+
+    public enum Visibility {
+        PUBLIC, MODERATOR
     }
 
     public Long getId() {
-        return this.id;
-    }
-
-    public Review id(Long id) {
-        this.setId(id);
-        return this;
+        return id;
     }
 
     public void setId(Long id) {
         this.id = id;
     }
 
-    public Instant getAt() {
-        return this.at;
+    public Instant getCreatedAt() {
+        return createdAt;
     }
 
-    public Review at(Instant at) {
-        this.setAt(at);
-        return this;
+    public void setCreatedAt(Instant createdAt) {
+        this.createdAt = createdAt;
     }
 
-    public void setAt(Instant at) {
-        this.at = at;
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(Instant updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public String getContent() {
+        return content;
+    }
+
+    public void setContent(String content) {
+        this.content = content;
     }
 
     public Status getStatus() {
-        return this.status;
-    }
-
-    public Review status(Status status) {
-        this.setStatus(status);
-        return this;
+        return status;
     }
 
     public void setStatus(Status status) {
         this.status = status;
     }
 
-    public Integer getTimeout() {
-        return this.timeout;
+    public Instant getDueAt() {
+        return dueAt;
     }
 
-    public Review timeout(Integer timeout) {
-        this.setTimeout(timeout);
-        return this;
-    }
-
-    public void setTimeout(Integer timeout) {
-        this.timeout = timeout;
-    }
-
-    public Set<Review> getReviews() {
-        return this.reviews;
-    }
-
-    public void setReviews(Set<Review> reviews) {
-        if (this.reviews != null) {
-            this.reviews.forEach(i -> i.setReplyTo(null));
-        }
-        if (reviews != null) {
-            reviews.forEach(i -> i.setReplyTo(this));
-        }
-        this.reviews = reviews;
-    }
-
-    public Review reviews(Set<Review> reviews) {
-        this.setReviews(reviews);
-        return this;
-    }
-
-    public Review addReview(Review review) {
-        this.reviews.add(review);
-        review.setReplyTo(this);
-        return this;
-    }
-
-    public Review removeReview(Review review) {
-        this.reviews.remove(review);
-        review.setReplyTo(null);
-        return this;
-    }
-
-    public Channel getChannel() {
-        return this.channel;
-    }
-
-    public void setChannel(Channel nkChannel) {
-        this.channel = nkChannel;
-    }
-
-    public Review channel(Channel nkChannel) {
-        this.setChannel(nkChannel);
-        return this;
+    public void setDueAt(Instant dueAt) {
+        this.dueAt = dueAt;
     }
 
     public Ticket getTicket() {
-        return this.ticket;
+        return ticket;
     }
 
     public void setTicket(Ticket ticket) {
         this.ticket = ticket;
     }
 
-    public Review ticket(Ticket ticket) {
-        this.setTicket(ticket);
-        return this;
-    }
-
     public Review getReplyTo() {
-        return this.replyto;
+        return replyTo;
     }
 
-    public void setReplyTo(Review review) {
-        this.replyto = review;
+    public void setReplyTo(Review replyTo) {
+        this.replyTo = replyTo;
     }
 
-    public Review replyto(Review review) {
-        this.setReplyTo(review);
-        return this;
+    public Long getAuthor() {
+        return author;
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (!(o instanceof Review)) {
-            return false;
-        }
-        return getId() != null && getId().equals(((Review) o).getId());
+    public void setAuthor(Long author) {
+        this.author = author;
     }
 
-    @Override
-    public int hashCode() {
-        return getClass().hashCode();
+    public Visibility getVisibility() {
+        return visibility;
     }
 
-    // prettier-ignore
-    @Override
-    public String toString() {
-        return "Review{" +
-                "id=" + getId() +
-                ", at='" + getAt() + "'" +
-                ", status='" + getStatus() + "'" +
-                ", timeout=" + getTimeout() +
-                "}";
+    public void setVisibility(Visibility visibility) {
+        this.visibility = visibility;
     }
+
 }

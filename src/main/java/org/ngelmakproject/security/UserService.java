@@ -9,14 +9,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Service;
 
 /**
  * Service Implementation for managing
  * {@link org.ngelmakproject.domain.Channel}.
  */
-@Service
-public class UserService {
+public abstract class UserService {
     private static final Logger log = LoggerFactory.getLogger(TicketService.class);
 
     /**
