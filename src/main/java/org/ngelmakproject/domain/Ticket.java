@@ -66,7 +66,6 @@ public class Ticket implements Serializable {
     private Visibility visibility = Visibility.PUBLIC;
 
     // The user whose action was reported
-    @NotNull
     @Column(name = "target_user")
     private Long targetUser;
 
@@ -85,7 +84,7 @@ public class Ticket implements Serializable {
     public enum Visibility {
         PUBLIC, // visible to target user
         MODERATOR, // visible only to moderators/admins
-        SYSTEM // internal system messages
+        ADMIN // internal system messages
     }
 
     public Long getId() {
