@@ -171,7 +171,7 @@ public class ReviewService {
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new BadRequestAlertException("Ticket not found", "ticket", "notFound"));
 
-        boolean isTargetUser = ticket.getTargetUser().equals(currentUserId);
+        boolean isTargetUser = ticket.getTargetUser() != null ? ticket.getTargetUser().equals(currentUserId) : false;
 
         // Fetch all reviews ordered by time
         List<Review> reviews = reviewRepository.findByTicketIdOrderByCreatedAtAsc(ticketId);
