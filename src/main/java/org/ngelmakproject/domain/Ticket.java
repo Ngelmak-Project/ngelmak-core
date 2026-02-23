@@ -62,7 +62,7 @@ public class Ticket implements Serializable {
     private Channel channel;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "visibility", nullable = false)
+    @Column(name = "visibility", nullable = false, length = 20)
     private Visibility visibility = Visibility.PUBLIC;
 
     // The user whose action was reported

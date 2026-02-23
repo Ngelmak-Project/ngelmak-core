@@ -43,7 +43,8 @@ public class Review implements Serializable {
     private Instant updatedAt;
 
     // Review text or moderator note
-    @Column(name = "content", columnDefinition = "TEXT")
+    @NotNull
+    @Column(name = "content", length = 1000, nullable = false)
     private String content;
 
     // OPEN, CLOSED, PENDING, etc.
@@ -73,7 +74,7 @@ public class Review implements Serializable {
 
     @NotNull
     @Enumerated(EnumType.STRING)
-    @Column(name = "visibility", nullable = false)
+    @Column(name = "visibility", nullable = false, length = 20)
     private Visibility visibility = Visibility.PUBLIC;
 
     public enum Status {

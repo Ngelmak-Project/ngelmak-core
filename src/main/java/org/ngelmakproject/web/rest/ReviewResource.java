@@ -20,8 +20,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import jakarta.validation.Valid;
-
 /**
  * REST controller for managing {@link org.ngelmakproject.domain.Review}.
  */
@@ -52,7 +50,7 @@ public class ReviewResource {
      * @throws URISyntaxException if the Location URI syntax is incorrect.
      */
     @PostMapping("")
-    public ResponseEntity<ReviewDTO> createReview(@Valid @RequestBody Review review) throws URISyntaxException {
+    public ResponseEntity<ReviewDTO> createReview(@RequestBody Review review) {
         log.debug("REST request to save Review : {}", review);
         if (review.getId() != null) {
             throw new BadRequestAlertException("A new review cannot already have an ID", ENTITY_NAME, "idexists");
