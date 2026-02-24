@@ -93,7 +93,7 @@ public class TicketResource {
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and the list
      *         of tickets in body.
      */
-    @GetMapping("/user-activity-report")
+    @GetMapping("/user-activity-reports")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<PageDTO<Ticket>> userActivityReports(Pageable pageable) {
         log.info("REST request to get a page of Tickets that concern the current user activity");
