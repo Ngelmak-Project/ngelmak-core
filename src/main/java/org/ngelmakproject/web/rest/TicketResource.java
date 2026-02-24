@@ -86,6 +86,22 @@ public class TicketResource {
     }
 
     /**
+     * {@code GET  /tickets/user-activity-report} : get all the tickets.
+     *
+     * @param pageable the pagination information.
+     * @throws UnauthorizedResourceAccessException
+     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and the list
+     *         of tickets in body.
+     */
+    @GetMapping("/user-activity-report")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<PageDTO<Ticket>> userActivityReports(Pageable pageable) {
+        log.info("REST request to get a page of Tickets that concern the current user activity");
+        Page<Ticket> page = ticketService.findAllUserActivityReports(pageable);
+        return ResponseEntity.ok().body(PageDTO.from(page));
+    }
+
+    /**
      * {@code GET  /tickets/:id} : get the "id" ticket.
      *
      * @param id the id of the ticket to retrieve.

@@ -10,6 +10,7 @@ import org.ngelmakproject.repository.TicketRepository;
 import org.ngelmakproject.security.UserService;
 import org.ngelmakproject.security.UserService.UserPrincipal;
 import org.ngelmakproject.web.rest.errors.UnauthorizedResourceAccessException;
+import org.ngelmakproject.web.rest.errors.UserNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -111,6 +112,28 @@ public class TicketService {
     public Page<Ticket> findAll(Pageable pageable) {
         log.debug("Request to get all Tickets");
         return ticketRepository.findAll(pageable);
+    }
+
+    /**
+     * Retrieves all tickets associated with a given user whose actions have been
+     * reported.
+     * <p>
+     * This method returns only unresolved tickets (i.e., tickets where
+     * {@code resolved = false})
+     * and orders them by their issuance date in descending order, ensuring that the
+     * most recent
+     * reports appear first. It is typically used to display the pending reports a
+     * user is
+     * responsible for reviewing or addressing.
+     *
+     * @param user the user whose reported actions are associated with the tickets
+     * @return a list of unresolved tickets concerning the specified user, ordered
+     *         from newest to oldest
+     */
+    @Transactional(readOnly = true)
+    public Page<Ticket> findAllUserActivityReports(Pageable pageable) {
+        Long id = UserService.getAuthenticatedUser().map(UserPrincipal::id).orElseThrow(UserNotFoundException::new);
+        return ticketRepository.findTicketsForUserOrdered(id, pageable);
     }
 
     /**
