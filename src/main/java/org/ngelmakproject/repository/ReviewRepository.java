@@ -12,5 +12,5 @@ import org.springframework.stereotype.Repository;
 @SuppressWarnings("unused")
 @Repository
 public interface ReviewRepository extends JpaRepository<Review, Long> {
-  List<Review> findByTicketIdOrderByCreatedAtAsc(Long ticketId);
+  List<Review> findByTicketIdOrderByCreatedAtDesc(Long ticketId);
 }

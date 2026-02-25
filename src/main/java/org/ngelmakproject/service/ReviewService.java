@@ -176,7 +176,7 @@ public class ReviewService {
         boolean isTargetUser = ticket.getTargetUser() != null ? ticket.getTargetUser().equals(currentUserId) : false;
 
         // Fetch all reviews ordered by time
-        List<Review> reviews = reviewRepository.findByTicketIdOrderByCreatedAtAsc(ticketId);
+        List<Review> reviews = reviewRepository.findByTicketIdOrderByCreatedAtDesc(ticketId);
 
         return reviews.stream()
                 .filter(r -> {
