@@ -164,10 +164,11 @@ public class ReviewService {
                 .map(UserPrincipal::id)
                 .orElseThrow(() -> new UnauthorizedResourceAccessException("review"));
 
+        var superAuthorities = List.of("ROLE_MODERATOR", "ROLE_ADMIN");
         boolean isModerator = UserService.getAuthenticatedUser()
                 .map(UserPrincipal::authorities)
                 .orElse(Set.of())
-                .contains("MODERATOR");
+                .stream().anyMatch(superAuthorities::contains);
 
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new BadRequestAlertException("Ticket not found", "ticket", "notFound"));
