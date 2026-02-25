@@ -11,17 +11,32 @@ public record ReviewDTO(
 		String content,
 		Visibility visibility,
 		TicketDTO ticket,
-		ReviewDTO replyTo) {
+		ReviewDTO replyTo,
+		boolean isAuthor) {
+
 	public static ReviewDTO from(Review r) {
 		if (r == null)
 			return null;
 		return new ReviewDTO(
-			r.getId(),
-			r.getCreatedAt(),
-			r.getContent(),
-			r.getVisibility(),
-			TicketDTO.from(r.getTicket()),
-			ReviewDTO.from(r.getReplyTo())
-		);
+				r.getId(),
+				r.getCreatedAt(),
+				r.getContent(),
+				r.getVisibility(),
+				TicketDTO.from(r.getTicket()),
+				ReviewDTO.from(r.getReplyTo(), false),
+				false);
+	}
+
+	public static ReviewDTO from(Review r, boolean isAuthor) {
+		if (r == null)
+			return null;
+		return new ReviewDTO(
+				r.getId(),
+				r.getCreatedAt(),
+				r.getContent(),
+				r.getVisibility(),
+				TicketDTO.from(r.getTicket()),
+				ReviewDTO.from(r.getReplyTo(), false),
+				isAuthor);
 	}
 }

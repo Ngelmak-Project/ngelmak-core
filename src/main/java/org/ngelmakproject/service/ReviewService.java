@@ -12,6 +12,7 @@ import org.ngelmakproject.repository.ReviewRepository;
 import org.ngelmakproject.repository.TicketRepository;
 import org.ngelmakproject.security.UserService;
 import org.ngelmakproject.security.UserService.UserPrincipal;
+import org.ngelmakproject.web.rest.dto.ReviewDTO;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
 import org.ngelmakproject.web.rest.errors.UnauthorizedResourceAccessException;
 import org.slf4j.Logger;
@@ -156,7 +157,7 @@ public class ReviewService {
      *                                             available
      * @throws BadRequestAlertException            if the ticket does not exist
      */
-    public List<Review> getVisibleReviewsForTicket(Long ticketId) {
+    public List<ReviewDTO> getVisibleReviewsForTicket(Long ticketId) {
         log.debug("Request to get all Reviews");
 
         Long currentUserId = UserService.getAuthenticatedUser()
@@ -191,6 +192,9 @@ public class ReviewService {
                         return true;
 
                     return false;
+                }).map(r -> {
+                    boolean isOwner = r.getAuthor() != null ? r.getAuthor().equals(currentUserId) : false;
+                    return ReviewDTO.from(r, isOwner);
                 })
                 .toList();
     }

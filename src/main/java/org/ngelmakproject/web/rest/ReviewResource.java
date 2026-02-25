@@ -69,8 +69,8 @@ public class ReviewResource {
     @GetMapping("/{ticketId}")
     public ResponseEntity<List<ReviewDTO>> getReviews(@PathVariable Long ticketId) {
         log.debug("REST request to get All Reviews");
-        List<Review> reviews = reviewService.getVisibleReviewsForTicket(ticketId);
-        return ResponseEntity.ok(reviews.stream().map(ReviewDTO::from).toList());
+        List<ReviewDTO> reviews = reviewService.getVisibleReviewsForTicket(ticketId);
+        return ResponseEntity.ok(reviews);
     }
 
     /**
