@@ -165,9 +165,7 @@ public class ReviewService {
         boolean isModerator = UserService.getAuthenticatedUser()
                 .map(UserPrincipal::authorities)
                 .orElse(Set.of())
-                .stream()
-                .peek(System.out::println)
-                .anyMatch(superAuthorities::contains);
+                .stream().anyMatch(superAuthorities::contains);
 
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new BadRequestAlertException("Ticket not found", "ticket", "notFound"));
@@ -175,9 +173,7 @@ public class ReviewService {
         boolean isTargetUser = ticket.getTargetUser() != null ? ticket.getTargetUser().equals(currentUserId) : false;
 
         // Fetch all reviews ordered by time
-        List<Review> reviews = reviewRepository.findByTicketIdOrderByCreatedAtAsc(ticketId);
-
-        return reviews.stream()
+        return reviewRepository.findByTicketIdOrderByCreatedAtAsc(ticketId).stream()
                 .filter(r -> {
                     // Moderators see everything
                     if (isModerator)
