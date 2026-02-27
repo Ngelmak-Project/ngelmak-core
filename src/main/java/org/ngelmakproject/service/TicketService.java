@@ -67,7 +67,6 @@ public class TicketService {
      * @throws UnauthorizedResourceAccessException if no authenticated user is
      *                                             available
      */
-
     public Ticket report(Ticket ticket, Optional<MultipartFile> media) {
         log.debug("Request to save Ticket : {}", ticket);
 
@@ -100,6 +99,29 @@ public class TicketService {
 
         // 5. Save
         return ticketRepository.save(ticket);
+    }
+
+    /**
+     * Resolve a Ticket.
+     *
+     * @param id the ID of the ticket to resolve.
+     * @return the resolved {@link Ticket}
+     * @throws UnauthorizedResourceAccessException if no authenticated user is
+     *                                             available
+     */
+    public Optional<Ticket> resolve(Long id) {
+        log.debug("Request to save Ticket : {}", id);
+
+        // 1. Identify resolver
+        Long resolvedBy = UserService.getAuthenticatedUser()
+                .map(UserPrincipal::id)
+                .orElseThrow(() -> new UnauthorizedResourceAccessException(ENTITY_NAME));
+        // 2. Find and resolve the ticket.
+        return this.ticketRepository.findById(id).map(existingTicket -> {
+            existingTicket.setHandledBy(resolvedBy);
+            existingTicket.setResolved(true);
+            return existingTicket;
+        }).map(ticketRepository::save);
     }
 
     /**
