@@ -103,6 +103,8 @@ public class TicketService {
 
     /**
      * Resolve a Ticket.
+     * <p>
+     * This will open the ticket if closed or close it otherwise.
      *
      * @param id the ID of the ticket to resolve.
      * @return the resolved {@link Ticket}
@@ -119,7 +121,7 @@ public class TicketService {
         // 2. Find and resolve the ticket.
         return this.ticketRepository.findById(id).map(existingTicket -> {
             existingTicket.setHandledBy(resolvedBy);
-            existingTicket.setResolved(true);
+            existingTicket.setResolved(!existingTicket.isResolved()); // toggle resolve state.
             return existingTicket;
         }).map(ticketRepository::save);
     }
