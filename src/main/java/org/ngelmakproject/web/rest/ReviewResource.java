@@ -7,7 +7,6 @@ import org.ngelmakproject.domain.Review;
 import org.ngelmakproject.service.ReviewService;
 import org.ngelmakproject.web.rest.dto.ReviewDTO;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
-import org.ngelmakproject.web.rest.util.HeaderUtil;
 import org.ngelmakproject.web.rest.util.ResponseUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -107,7 +106,6 @@ public class ReviewResource {
         log.debug("REST request to delete Review : {}", id);
         reviewService.delete(id);
         return ResponseEntity.noContent()
-                .headers(HeaderUtil.createEntityDeletionAlert(applicationName, ENTITY_NAME, id.toString()))
                 .build();
     }
 }

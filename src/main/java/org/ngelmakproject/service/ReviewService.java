@@ -165,7 +165,9 @@ public class ReviewService {
         boolean isModerator = UserService.getAuthenticatedUser()
                 .map(UserPrincipal::authorities)
                 .orElse(Set.of())
-                .stream().anyMatch(superAuthorities::contains);
+                .stream()
+                .peek(System.out::println)
+                .anyMatch(superAuthorities::contains);
 
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new BadRequestAlertException("Ticket not found", "ticket", "notFound"));
