@@ -8,6 +8,7 @@ import org.ngelmakproject.service.ReviewService;
 import org.ngelmakproject.web.rest.dto.ReviewDTO;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
 import org.ngelmakproject.web.rest.util.HeaderUtil;
+import org.ngelmakproject.web.rest.util.ResponseUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -57,6 +59,27 @@ public class ReviewResource {
         }
         review = reviewService.save(review);
         return ResponseEntity.ok().body(ReviewDTO.from(review));
+    }
+
+    /**
+     * {@code PUT  /reviews} : Update an existing review.
+     *
+     * @param review the review to update.
+     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with
+     *         body the updated review, or with status {@code 400 (Bad Request)}
+     *         if the review does not have an ID or doesn't exist,
+     *         or with status {@code 404 (Not Found)} if the review can't be found.
+     * @throws URISyntaxException if the Location URI syntax is incorrect.
+     */
+    @PutMapping("")
+    public ResponseEntity<ReviewDTO> updateReview(@RequestBody Review review) {
+        log.debug("REST request to update Review: {}", review);
+
+        if (review.getId() == null) {
+            throw new BadRequestAlertException("Invalid review ID", ENTITY_NAME, "idnull");
+        }
+
+        return ResponseUtil.wrapOrNotFound(reviewService.udate(review).map(ReviewDTO::from));
     }
 
     /**

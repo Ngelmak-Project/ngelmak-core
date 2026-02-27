@@ -99,7 +99,7 @@ public class ReviewService {
     }
 
     /**
-     * Partially update a review.
+     * Update the fields provided in Review.
      *
      * @param review the entity to update partially.
      * @return the persisted entity.
@@ -110,9 +110,6 @@ public class ReviewService {
         return reviewRepository
                 .findById(review.getId())
                 .map(existingReview -> {
-                    if (review.getStatus() != null) {
-                        existingReview.setStatus(review.getStatus());
-                    }
                     if (review.getContent() != null) {
                         existingReview.setContent(review.getContent());
                     }
