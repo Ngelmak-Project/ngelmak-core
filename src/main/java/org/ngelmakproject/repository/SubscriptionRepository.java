@@ -15,11 +15,11 @@ import org.springframework.stereotype.Repository;
 @SuppressWarnings("unused")
 @Repository
 public interface SubscriptionRepository extends JpaRepository<Subscription, Long> {
-	@Query("SELECT s FROM Subscription s WHERE s.subscribeTo.id = :subscribeTo AND s.subscriber.id = :subscriber")
+	@Query("SELECT s FROM Subscription s WHERE s.subscriber.id = :subscriberId AND s.subscribedTo.id = :subscribedToId")
 	Optional<Subscription> findBySubscriberAndSubscribedTo(
-			@Param("subscriber") Long subscriber, @Param("subscribeTo") Long subscribeTo);
+			@Param("subscriberId") Long subscriberId, @Param("subscribedToId") Long subscribedToId);
 
-	Optional<Subscription> findBySubscriberAndSubscribedTo(Channel subscriber, Channel subscribeTo);
+	Optional<Subscription> findBySubscriberAndSubscribedTo(Channel subscriber, Channel subscribedTo);
 
 	/**
 	 * Retrieves all subscriptions where the given channel appears either
@@ -35,7 +35,7 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, Long
 			""")
 	List<Subscription> findAllByChannelInvolved(@Param("channelId") Long channelId);
 
-	List<Subscription> findBySubscribedTo(Channel subscribeTo);
+	List<Subscription> findBySubscribedTo(Channel subscribedTo);
 
 	@Query("SELECT s FROM Subscription s WHERE s.subscribedTo.id = :channelId")
 	List<Subscription> findBySubscribedTo(@Param("channelId") Long channelId);
