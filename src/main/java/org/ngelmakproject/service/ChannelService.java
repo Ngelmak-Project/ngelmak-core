@@ -5,9 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.ngelmakproject.domain.Channel;
-import org.ngelmakproject.domain.Membership;
 import org.ngelmakproject.repository.ChannelRepository;
-import org.ngelmakproject.repository.MembershipRepository;
 import org.ngelmakproject.security.UserService;
 import org.ngelmakproject.web.rest.dto.ChannelDTO;
 import org.ngelmakproject.web.rest.errors.ChannelNotFoundException;
@@ -32,14 +30,11 @@ public class ChannelService {
     private static final String ENTITY_NAME = "channel";
 
     private final ChannelRepository channelRepository;
-    private final MembershipRepository membershipRepository;
     private final FileService fileService;
 
     public ChannelService(ChannelRepository channelRepository,
-            MembershipRepository membershipRepository,
             FileService fileService) {
         this.channelRepository = channelRepository;
-        this.membershipRepository = membershipRepository;
         this.fileService = fileService;
     }
 
@@ -218,31 +213,6 @@ public class ChannelService {
                         fileService.deleteByUrls(List.of(deletedBannerUrl));
                     log.debug("Changed information for Channel: {}", channel);
                     return channel;
-                }).orElseThrow(ChannelNotFoundException::new);
-    }
-
-    public Channel followUser(Long targetChannelId) {
-        log.debug("Request to follow an Channel");
-        return this.findOneByCurrentUser().map(
-                currChannel -> {
-                    Channel followed = this.channelRepository.findById(targetChannelId)
-                            .orElseThrow(ChannelNotFoundException::new);
-                    Membership membership = new Membership().follower(currChannel).following(followed)
-                            .at(Instant.now());
-                    membershipRepository.save(membership);
-                    log.debug("A new relationship is created between {} and {}", currChannel, followed);
-                    return currChannel;
-                }).orElseThrow(ChannelNotFoundException::new);
-    }
-
-    public Channel unfollowUser(Long targetChannelId) {
-        log.debug("Request to unfollow an Channel");
-        return this.findOneByCurrentUser().map(
-                currChannel -> {
-                    membershipRepository.findOneByFollowingAndFollower(targetChannelId, currChannel.getId())
-                            .ifPresent(membership -> this.membershipRepository.delete(membership));
-                    log.debug("Membership is now removed.", currChannel);
-                    return currChannel;
                 }).orElseThrow(ChannelNotFoundException::new);
     }
 }

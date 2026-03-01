@@ -12,9 +12,9 @@ import org.ngelmakproject.domain.Post;
 import org.ngelmakproject.domain.Post.Status;
 import org.ngelmakproject.domain.Reaction;
 import org.ngelmakproject.repository.FeedRepository;
-import org.ngelmakproject.repository.MembershipRepository;
 import org.ngelmakproject.repository.PostRepository;
 import org.ngelmakproject.repository.ReactionRepository;
+import org.ngelmakproject.repository.SubscriptionRepository;
 import org.ngelmakproject.web.rest.dto.FeedDTO;
 import org.ngelmakproject.web.rest.dto.PageDTO;
 import org.ngelmakproject.web.rest.dto.PostDTO;
@@ -41,15 +41,15 @@ public class FeedService {
     private final ReactionRepository reactionRepository;
     private final PostRepository postRepository;
     private final ChannelService channelService;
-    private final MembershipRepository membershipRepository;
+    private final SubscriptionRepository subscriptionRepository;
 
     public FeedService(FeedRepository feedRepository, ReactionRepository reactionRepository,
             ChannelService channelService,
-            MembershipRepository membershipRepository, PostRepository postRepository) {
+            SubscriptionRepository subscriptionRepository, PostRepository postRepository) {
         this.feedRepository = feedRepository;
         this.reactionRepository = reactionRepository;
         this.channelService = channelService;
-        this.membershipRepository = membershipRepository;
+        this.subscriptionRepository = subscriptionRepository;
         this.postRepository = postRepository;
     }
 
@@ -67,9 +67,9 @@ public class FeedService {
      */
     public void propagatePostToFollowers(Post post) {
         log.debug("Propagate Post to get all followers.");
-        List<Feed> feeds = membershipRepository.findByFollowing(post.getChannel()).stream().map(membership -> {
+        List<Feed> feeds = subscriptionRepository.findBySubscribedTo(post.getChannel().getId()).stream().map(follower -> {
             Feed feed = new Feed();
-            feed.setFeedOwner(membership.getFollower());
+            feed.setFeedOwner(follower.getSubscriber());
             feed.setPost(post);
             return feed;
         }).collect(Collectors.toList());

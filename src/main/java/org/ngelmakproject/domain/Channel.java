@@ -2,18 +2,14 @@ package org.ngelmakproject.domain;
 
 import java.io.Serializable;
 import java.time.Instant;
-import java.util.HashSet;
-import java.util.Set;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.OneToMany;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
@@ -73,18 +69,6 @@ public class Channel implements Serializable {
     @JsonIgnore
     @Column(name = "deleted_at", nullable = true)
     private Instant deletedAt;
-
-    /**
-     * any user can subscribe to any other user's channel which my eventually have
-     * any subscriber
-     */
-    @OneToMany(fetch = FetchType.LAZY, mappedBy = "follower")
-    @JsonIgnore
-    private Set<Membership> memberships = new HashSet<>();
-
-    @OneToMany(fetch = FetchType.LAZY, mappedBy = "following")
-    @JsonIgnore
-    private Set<Membership> subscriptions = new HashSet<>();
 
     public Long getId() {
         return id;
@@ -158,28 +142,11 @@ public class Channel implements Serializable {
         this.deletedAt = deletedAt;
     }
 
-    public Set<Membership> getMemberships() {
-        return memberships;
-    }
-
-    public void setMemberships(Set<Membership> memberships) {
-        this.memberships = memberships;
-    }
-
-    public Set<Membership> getSubscriptions() {
-        return subscriptions;
-    }
-
-    public void setSubscriptions(Set<Membership> subscriptions) {
-        this.subscriptions = subscriptions;
-    }
-
     @Override
     public String toString() {
         return "Channel [id=" + id + ", user=" + user + ", identifier=" + identifier + ", name=" + name
                 + ", description=" + description + ", avatar=" + avatar + ", banner=" + banner + ", createdAt="
-                + createdAt + ", deletedAt=" + deletedAt + ", memberships=" + memberships + ", subscriptions="
-                + subscriptions + "]";
+                + createdAt + ", deletedAt=" + deletedAt + "]";
     }
 
 }
