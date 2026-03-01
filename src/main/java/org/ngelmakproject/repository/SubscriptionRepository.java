@@ -16,8 +16,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface SubscriptionRepository extends JpaRepository<Subscription, Long> {
 	@Query("SELECT s FROM Subscription s WHERE s.subscribeTo.id = :subscribeTo AND s.subscriber.id = :subscriber")
-	Optional<Subscription> findByFollowingAndFollower(@Param("subscribeTo") Long subscribeTo,
-			@Param("subscriber") Long subscriber);
+	Optional<Subscription> findBySubscriberAndSubscribedTo(
+			@Param("subscriber") Long subscriber, @Param("subscribeTo") Long subscribeTo);
 
 	Optional<Subscription> findBySubscriberAndSubscribedTo(Channel subscriber, Channel subscribeTo);
 
@@ -36,7 +36,7 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, Long
 	List<Subscription> findAllByChannelInvolved(@Param("channelId") Long channelId);
 
 	List<Subscription> findBySubscribedTo(Channel subscribeTo);
-	
+
 	@Query("SELECT s FROM Subscription s WHERE s.subscribedTo.id = :channelId")
 	List<Subscription> findBySubscribedTo(@Param("channelId") Long channelId);
 
