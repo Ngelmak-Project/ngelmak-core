@@ -1,10 +1,11 @@
 package org.ngelmakproject.web.rest;
 
 import java.net.URISyntaxException;
-import java.util.Optional;
 
 import org.ngelmakproject.domain.Channel;
+import org.ngelmakproject.domain.Subscription;
 import org.ngelmakproject.service.ChannelService;
+import org.ngelmakproject.service.SubscriptionService;
 import org.ngelmakproject.web.rest.dto.ChannelDTO;
 import org.ngelmakproject.web.rest.dto.PageDTO;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
@@ -55,9 +56,11 @@ public class ChannelResource {
     private String applicationName;
 
     private final ChannelService channelService;
+    private final SubscriptionService subscriptionService;
 
-    public ChannelResource(ChannelService channelService) {
+    public ChannelResource(ChannelService channelService, SubscriptionService subscriptionService) {
         this.channelService = channelService;
+        this.subscriptionService = subscriptionService;
     }
 
     /**
@@ -146,10 +149,9 @@ public class ChannelResource {
      *         the channel, or with status {@code 404 (Not Found)}.
      */
     @GetMapping("/{id}")
-    public ResponseEntity<Channel> getChannel(@PathVariable("id") Long id) {
+    public ResponseEntity<ChannelDTO> getChannel(@PathVariable Long id) {
         log.debug("REST request to get Channel : {}", id);
-        Optional<Channel> channel = channelService.findOne(id);
-        return ResponseUtil.wrapOrNotFound(channel);
+        return ResponseUtil.wrapOrNotFound(channelService.findOne(id));
     }
 
     /**
@@ -160,7 +162,7 @@ public class ChannelResource {
      */
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<Void> blockChannel(@PathVariable("id") Long id) {
+    public ResponseEntity<Void> blockChannel(@PathVariable Long id) {
         log.debug("REST request to delete Channel : {}", id);
         channelService.delete(id);
         return ResponseEntity.noContent()
@@ -176,7 +178,7 @@ public class ChannelResource {
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public ResponseEntity<Void> deleteChannel(@PathVariable("id") Long id) {
+    public ResponseEntity<Void> deleteChannel(@PathVariable Long id) {
         log.debug("REST request to delete Channel : {}", id);
         channelService.delete(id);
         return ResponseEntity.noContent()
@@ -193,7 +195,7 @@ public class ChannelResource {
      */
     @PutMapping("/upload-avatar")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ChannelDTO> updateAvatar(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<ChannelDTO> updateAvatar(@RequestParam MultipartFile file) {
         log.debug("REST request to upload the user's channel avatar");
         var updatedChannel = channelService.updateAvatar(file);
         return ResponseEntity.ok().body(ChannelDTO.from(updatedChannel));
@@ -212,5 +214,43 @@ public class ChannelResource {
         log.debug("REST request to upload the user's channel banner");
         var updatedChannel = channelService.updateBanner(file);
         return ResponseEntity.ok().body(ChannelDTO.from(updatedChannel));
+    }
+
+    /**
+     * {@code POST /channel/follow} : Follow the target
+     * channel.
+     *
+     * <p>
+     * If the subscription already exists, it is returned as-is.
+     * Otherwise, a new subscription is created.
+     * </p>
+     *
+     * @param targetChannelId the ID of the channel to follow
+     * @return the existing or newly created Subscription
+     */
+    @PostMapping("/follow")
+    public ResponseEntity<Subscription> follow(@RequestBody Channel channel) {
+        log.debug("REST request to follow Channel : {}", channel);
+        Subscription subscription = subscriptionService.followChannel(channel);
+        return ResponseEntity.ok(subscription);
+    }
+
+    /**
+     * {@code DELETE /channel/unfollow/:targetChannelId} : Unfollow the target
+     * channel.
+     *
+     * <p>
+     * If no subscription exists, the operation is a no-op.
+     * The method is idempotent.
+     * </p>
+     *
+     * @param targetChannelId the ID of the channel to unfollow
+     * @return {@code 204 No Content}
+     */
+    @DeleteMapping("/unfollow/{targetChannelId}")
+    public ResponseEntity<Void> unfollow(@PathVariable Long targetChannelId) {
+        log.debug("REST request to unfollow Channel : {}", targetChannelId);
+        subscriptionService.unfollowUser(targetChannelId);
+        return ResponseEntity.noContent().build();
     }
 }

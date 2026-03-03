@@ -30,11 +30,13 @@ public class ChannelService {
     private static final String ENTITY_NAME = "channel";
 
     private final ChannelRepository channelRepository;
+    private final SubscriptionService subscriptionService;
     private final FileService fileService;
 
-    public ChannelService(ChannelRepository channelRepository,
+    public ChannelService(ChannelRepository channelRepository, SubscriptionService subscriptionService,
             FileService fileService) {
         this.channelRepository = channelRepository;
+        this.subscriptionService = subscriptionService;
         this.fileService = fileService;
     }
 
@@ -122,9 +124,12 @@ public class ChannelService {
      * @return the entity.
      */
     @Transactional(readOnly = true)
-    public Optional<Channel> findOne(Long id) {
+    public Optional<ChannelDTO> findOne(Long id) {
         log.debug("Request to get Channel : {}", id);
-        return channelRepository.findById(id);
+        return channelRepository.findById(id).map(channel -> {
+            var stats = subscriptionService.getSubscriptionStatistics(channel.getId());
+            return ChannelDTO.from(channel, stats);
+        });
     }
 
     /**
