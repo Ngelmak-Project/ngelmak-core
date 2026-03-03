@@ -5,7 +5,6 @@ import java.net.URISyntaxException;
 import org.ngelmakproject.domain.Channel;
 import org.ngelmakproject.domain.Subscription;
 import org.ngelmakproject.service.ChannelService;
-import org.ngelmakproject.service.SubscriptionService;
 import org.ngelmakproject.web.rest.dto.ChannelDTO;
 import org.ngelmakproject.web.rest.dto.PageDTO;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
@@ -56,11 +55,9 @@ public class ChannelResource {
     private String applicationName;
 
     private final ChannelService channelService;
-    private final SubscriptionService subscriptionService;
 
-    public ChannelResource(ChannelService channelService, SubscriptionService subscriptionService) {
+    public ChannelResource(ChannelService channelService) {
         this.channelService = channelService;
-        this.subscriptionService = subscriptionService;
     }
 
     /**
@@ -231,7 +228,7 @@ public class ChannelResource {
     @PostMapping("/follow")
     public ResponseEntity<Subscription> follow(@RequestBody Channel channel) {
         log.debug("REST request to follow Channel : {}", channel);
-        Subscription subscription = subscriptionService.followChannel(channel);
+        Subscription subscription = channelService.followChannel(channel);
         return ResponseEntity.ok(subscription);
     }
 
@@ -250,7 +247,7 @@ public class ChannelResource {
     @DeleteMapping("/unfollow/{targetChannelId}")
     public ResponseEntity<Void> unfollow(@PathVariable Long targetChannelId) {
         log.debug("REST request to unfollow Channel : {}", targetChannelId);
-        subscriptionService.unfollowUser(targetChannelId);
+        channelService.unfollowUser(targetChannelId);
         return ResponseEntity.noContent().build();
     }
 }
