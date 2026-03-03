@@ -7,6 +7,7 @@ import org.ngelmakproject.domain.Subscription;
 import org.ngelmakproject.service.ChannelService;
 import org.ngelmakproject.web.rest.dto.ChannelDTO;
 import org.ngelmakproject.web.rest.dto.PageDTO;
+import org.ngelmakproject.web.rest.dto.SubscriptionDTO;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
 import org.ngelmakproject.web.rest.util.HeaderUtil;
 import org.ngelmakproject.web.rest.util.ResponseUtil;
@@ -226,10 +227,10 @@ public class ChannelResource {
      * @return the existing or newly created Subscription
      */
     @PostMapping("/follow")
-    public ResponseEntity<Subscription> follow(@RequestBody Channel channel) {
+    public ResponseEntity<SubscriptionDTO> follow(@RequestBody Channel channel) {
         log.debug("REST request to follow Channel : {}", channel);
         Subscription subscription = channelService.followChannel(channel);
-        return ResponseEntity.ok(subscription);
+        return ResponseEntity.ok(SubscriptionDTO.from(subscription));
     }
 
     /**

@@ -266,7 +266,6 @@ public class ChannelService {
      */
     public Subscription followChannel(Channel subscribedTo) {
         log.debug("Request to follow Channel : {}", subscribedTo);
-
         // Load the channel associated with the current authenticated user
         Channel subscriber = this.findOneByCurrentUser()
                 .orElseThrow(ChannelNotFoundException::new);
