@@ -284,30 +284,23 @@ public class ChannelService {
 
     /**
      * Removes the subscription between the current user and the target channel.
+     * If the subscription does not exist or does not bellong to the connected user,
+     * then no action.
      *
-     * <p>
-     * If no subscription exists, nothing happens. The method is idempotent:
-     * calling it multiple times produces the same result.
-     * </p>
-     *
-     * @param targetChannelId the ID of the channel to unfollow
-     * @return the current user's channel
+     * @param id the ID of the subscription to remove
      * @throws ChannelNotFoundException if the current user's channel cannot be
      *                                  found
      */
-    public void unfollowUser(Long targetChannelId) {
-        log.debug("Request to unfollow Channel : {}", targetChannelId);
+    public void unfollowUser(Long id) {
+        log.debug("Request to unfollow Channel : {}", id);
         // Load the channel associated with the current authenticated user
         Channel currentChannel = this.findOneByCurrentUser()
                 .orElseThrow(ChannelNotFoundException::new);
 
         // Look for an existing subscription and delete it if present
         subscriptionRepository
-                .findBySubscriberAndSubscribedTo(currentChannel.getId(), targetChannelId)
+                .findById(id).filter(s -> s.getSubscriber().getId().equals(currentChannel.getId()))
                 .ifPresent(subscriptionRepository::delete);
-
-        log.debug("Subscription removed for follower {} from channel {}", currentChannel.getId(),
-                targetChannelId);
     }
 
     /**

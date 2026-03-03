@@ -234,7 +234,7 @@ public class ChannelResource {
     }
 
     /**
-     * {@code DELETE /channel/unfollow/:targetChannelId} : Unfollow the target
+     * {@code DELETE /channel/unfollow/:id} : Unfollow the target
      * channel.
      *
      * <p>
@@ -242,13 +242,13 @@ public class ChannelResource {
      * The method is idempotent.
      * </p>
      *
-     * @param targetChannelId the ID of the channel to unfollow
+     * @param id the ID of the subscription to remove/unfollow
      * @return {@code 204 No Content}
      */
-    @DeleteMapping("/unfollow/{targetChannelId}")
-    public ResponseEntity<Void> unfollow(@PathVariable Long targetChannelId) {
-        log.debug("REST request to unfollow Channel : {}", targetChannelId);
-        channelService.unfollowUser(targetChannelId);
+    @DeleteMapping("/unfollow/{id}")
+    public ResponseEntity<Void> unfollow(@PathVariable Long id) {
+        log.debug("REST request to unfollow Channel : {}", id);
+        channelService.unfollowUser(id);
         return ResponseEntity.noContent().build();
     }
 }
