@@ -32,11 +32,11 @@ public class Subscription implements Serializable {
     @Column(name = "notifications_enabled", nullable = false)
     private boolean notificationsEnabled = true;
 
-    @ManyToOne(optional = false, cascade = CascadeType.REMOVE)
+    @ManyToOne(optional = false)
     @JoinColumn(nullable = false)
     private Channel subscriber;
 
-    @ManyToOne(optional = false, cascade = CascadeType.REMOVE)
+    @ManyToOne(optional = false)
     @JoinColumn(nullable = false)
     private Channel subscribedTo;
 
