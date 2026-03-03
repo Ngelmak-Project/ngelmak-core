@@ -9,6 +9,7 @@ import org.ngelmakproject.domain.Subscription;
 import org.ngelmakproject.repository.ChannelRepository;
 import org.ngelmakproject.repository.SubscriptionRepository;
 import org.ngelmakproject.security.UserService;
+import org.ngelmakproject.security.UserService.UserPrincipal;
 import org.ngelmakproject.web.rest.dto.ChannelDTO;
 import org.ngelmakproject.web.rest.dto.SubscriptionDTO;
 import org.ngelmakproject.web.rest.dto.SubscriptionStatsDTO;
@@ -134,6 +135,31 @@ public class ChannelService {
             var stats = getSubscriptionStatistics(channel.getId());
             return ChannelDTO.from(channel, stats);
         });
+    }
+
+    /**
+     * Retrieves the Channel associated with the currently authenticated user.
+     *
+     * <p>
+     * This method is designed to be safe even when invoked in contexts where
+     * authentication is not guaranteed (e.g., unsecured endpoints). It performs
+     * several defensive checks to avoid runtime exceptions such as
+     * {@link ClassCastException} or {@link NullPointerException}.
+     * </p>
+     * 
+     * [TODO] Save the channel if exists into cache.
+     *
+     * @return an {@code Optional<Channel>} for the authenticated user, or empty
+     *         if
+     *         no valid authenticated user is present.
+     */
+    @Transactional(readOnly = true)
+    public Optional<ChannelDTO> findChannelDetails() {
+        return UserService.getAuthenticatedUser().map(UserPrincipal::id)
+                .flatMap(id -> channelRepository.findOneByUser(id).map(channel -> {
+                    var stats = getSubscriptionStatistics(channel.getId());
+                    return ChannelDTO.from(channel, stats);
+                }));
     }
 
     /**
