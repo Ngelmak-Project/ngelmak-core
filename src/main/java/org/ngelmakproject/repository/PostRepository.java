@@ -77,35 +77,41 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			@Param("offset") int offset);
 
 	@Query(value = """
-						SELECT DISTINCT p.*,
-							(
-									(
-			    -- Recency score with decay (last 48 hours matter most)
-			    (EXTRACT(EPOCH FROM p.at) - EXTRACT(EPOCH FROM :windowStart)) / 3600
-			    * EXP(-(EXTRACT(EPOCH FROM NOW()) - EXTRACT(EPOCH FROM p.at)) / 86400)
+									SELECT DISTINCT p.*,
+										(
+			    -- Recency score with decay
+			    (
+			        (EXTRACT(EPOCH FROM p.at) - EXTRACT(EPOCH FROM :windowStart)) / 3600.0
+			    )
+			    * EXP(
+			        -(
+			            (EXTRACT(EPOCH FROM NOW()) - EXTRACT(EPOCH FROM p.at))
+			            / 86400.0
+			        )
+			    )
 			    * 2.0
 			)
 			+
 			(
-			    -- Engagement score (0-20 comments → 0-10 points)
+			    -- Engagement score
 			    LEAST(p.comment_count, 20) * 0.5
 			)
 			+
 			(
-			    -- Session-based randomness (0-100)
-			    ((hashtext(CONCAT(:sessionKey, '-', p.id)) % 1000) / 1000.0 * 100)
+			    -- Session-based randomness
+			    ((hashtext(CONCAT(:sessionKey, '-', p.id)) % 1000)::float / 1000.0 * 100.0)
 			)
+			AS score
 
-							) AS score
-						FROM nk_post p
-						LEFT JOIN nk_channel c ON c.id = p.channel_id
-						LEFT JOIN nk_post r ON r.post_reply_id = p.id
-						LEFT JOIN nk_post_file pf ON pf.post_id = p.id
-						LEFT JOIN nk_file f ON f.id = pf.file_id
-						WHERE p.at >= :windowStart
-						ORDER BY score DESC
-						LIMIT :limit OFFSET :offset
-						""", nativeQuery = true)
+									FROM nk_post p
+									LEFT JOIN nk_channel c ON c.id = p.channel_id
+									LEFT JOIN nk_post r ON r.post_reply_id = p.id
+									LEFT JOIN nk_post_file pf ON pf.post_id = p.id
+									LEFT JOIN nk_file f ON f.id = pf.file_id
+									WHERE p.at >= :windowStart
+									ORDER BY score DESC
+									LIMIT :limit OFFSET :offset
+									""", nativeQuery = true)
 	List<Post> fetchFeedWithRelations(
 			@Param("sessionKey") String sessionKey,
 			@Param("windowStart") Instant windowStart,
