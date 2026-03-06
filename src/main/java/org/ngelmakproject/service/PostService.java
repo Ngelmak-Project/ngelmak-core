@@ -55,7 +55,7 @@ public class PostService {
     private static final Logger log = LoggerFactory.getLogger(PostService.class);
 
     private static final String ENTITY_NAME = "post";
-    private final Instant windowStart = Instant.now().minus(5 * 365, ChronoUnit.DAYS);
+    private final Instant windowStart = Instant.now().minus(50 * 365, ChronoUnit.DAYS);
 
     private final PostRepository postRepository;
     private final FileService fileService;
