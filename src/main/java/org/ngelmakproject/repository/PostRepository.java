@@ -90,8 +90,8 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			LEFT JOIN nk_file f ON f.id = pf.file_id
 			WHERE p.at >= :windowStart
 			ORDER BY score DESC
-			LIMIT :limit OFFSET :offset;
-						""", nativeQuery = true)
+			LIMIT :limit OFFSET :offset
+			""", nativeQuery = true)
 	List<Post> fetchFeedWithRelations(
 			@Param("sessionKey") String sessionKey,
 			@Param("windowStart") Instant windowStart,
