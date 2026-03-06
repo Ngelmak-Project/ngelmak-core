@@ -1,6 +1,5 @@
 package org.ngelmakproject.web.rest.dto;
 
-import java.time.Instant;
 import java.util.List;
 
 /**
@@ -11,7 +10,6 @@ import java.util.List;
 public record FeedPageDTO<T>(
 		List<T> content,
 		String sessionKey,
-		Instant windowStart,
 		Integer number,
 		List<SortDTO> sorts) {
 }

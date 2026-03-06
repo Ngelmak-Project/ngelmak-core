@@ -55,7 +55,7 @@ public class PostService {
     private static final Logger log = LoggerFactory.getLogger(PostService.class);
 
     private static final String ENTITY_NAME = "post";
-    private final Instant windowStart = Instant.now().minus(60, ChronoUnit.DAYS);
+    private final Instant windowStart = Instant.now().minus(12, ChronoUnit.YEARS);
 
     private final PostRepository postRepository;
     private final FileService fileService;
@@ -438,7 +438,7 @@ public class PostService {
             return PostDTO.from(post, summary);
         }).toList();
 
-        return new FeedPageDTO<PostDTO>(feeds, sessionKey, windowStart, pageable.getPageNumber(),
+        return new FeedPageDTO<PostDTO>(feeds, sessionKey, pageable.getPageNumber(),
                 pageable.getSort().stream()
                         .map(order -> new SortDTO(order.getProperty(), order.getDirection().name()))
                         .toList());
