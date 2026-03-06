@@ -96,7 +96,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			)
 			+
 			(
-			    ((hashtext(CONCAT(:sessionKey, '-', p.id)) % 1000)::float / 1000.0 * 100.0)
+			    ((hashtext(CONCAT(:sessionKey, '-', p.id)) % 1000) / 1000.0 * 100.0)
 			)
 			AS score
 			FROM nk_post p
