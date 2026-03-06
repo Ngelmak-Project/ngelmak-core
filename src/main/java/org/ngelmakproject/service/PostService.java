@@ -1,6 +1,8 @@
 package org.ngelmakproject.service;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -8,16 +10,22 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.ngelmakproject.domain.Channel;
+import org.ngelmakproject.domain.Feed;
 import org.ngelmakproject.domain.File;
 import org.ngelmakproject.domain.Post;
 import org.ngelmakproject.domain.Post.Status;
 import org.ngelmakproject.domain.Post.Visibility;
 import org.ngelmakproject.domain.Reaction;
+import org.ngelmakproject.repository.FeedRepository;
 import org.ngelmakproject.repository.PostRepository;
 import org.ngelmakproject.repository.ReactionRepository;
+import org.ngelmakproject.repository.SubscriptionRepository;
+import org.ngelmakproject.web.rest.dto.FeedDTO;
+import org.ngelmakproject.web.rest.dto.FeedPageDTO;
 import org.ngelmakproject.web.rest.dto.PageDTO;
 import org.ngelmakproject.web.rest.dto.PostDTO;
 import org.ngelmakproject.web.rest.dto.ReactionSummaryDTO;
+import org.ngelmakproject.web.rest.dto.SortDTO;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
 import org.ngelmakproject.web.rest.errors.ChannelNotFoundException;
 import org.ngelmakproject.web.rest.errors.ResourceNotFoundException;
@@ -47,21 +55,28 @@ public class PostService {
     private static final Logger log = LoggerFactory.getLogger(PostService.class);
 
     private static final String ENTITY_NAME = "post";
+    private final Instant windowStart = Instant.now().minus(60, ChronoUnit.DAYS);
 
     private final PostRepository postRepository;
     private final FileService fileService;
     private final ChannelService channelService;
     private final ReactionRepository reactionRepository;
     private final EntityManager entityManager;
+    private final FeedRepository feedRepository;
+    private final SubscriptionRepository subscriptionRepository;
 
     PostService(PostRepository postRepository,
             FileService fileService,
             ReactionRepository reactionRepository,
             ChannelService channelService,
+            FeedRepository feedRepository,
+            SubscriptionRepository subscriptionRepository,
             EntityManager entityManager) {
         this.postRepository = postRepository;
         this.reactionRepository = reactionRepository;
+        this.feedRepository = feedRepository;
         this.fileService = fileService;
+        this.subscriptionRepository = subscriptionRepository;
         this.channelService = channelService;
         this.entityManager = entityManager;
     }
@@ -358,6 +373,137 @@ public class PostService {
         }).toList();
 
         return postDTOs;
+    }
+
+    /**
+     * Create a personalized feed for each user based on their connections and
+     * recommendations.
+     * 
+     * <p>
+     * "Fan-Out on Write” approach, where each user has their own feed, and new
+     * posts are propagated to all followers’ feeds upon creation. This allows fo
+     * efficient feed retrieval.
+     * </p>
+     * 
+     * @param post
+     */
+    public void propagatePostToFollowers(Post post) {
+        log.debug("Propagate Post to get all followers.");
+        List<Feed> feeds = subscriptionRepository.findBySubscribedTo(post.getChannel().getId()).stream()
+                .map(follower -> {
+                    Feed feed = new Feed();
+                    feed.setFeedOwner(follower.getSubscriber());
+                    feed.setPost(post);
+                    return feed;
+                }).collect(Collectors.toList());
+        feedRepository.saveAll(feeds);
+    }
+
+    public FeedPageDTO<PostDTO> getFeed(Pageable pageable, String sessionKey) {
+        // If no session key provided → generate timestamp
+        if (sessionKey == null || sessionKey.isBlank()) {
+            sessionKey = String.valueOf(Instant.now().getEpochSecond());
+        }
+        // 1. Fetch feed entries with posts, channels, and files
+        Optional<Channel> optional = channelService.findOneByCurrentUser();
+        List<Post> posts = new ArrayList<>();
+        if (optional.isPresent()) {
+            log.debug("Request to retrieve Feeds for Channel {}.", optional.get());
+            // Fetch feed entries with posts, channels, and files
+            var page = feedRepository.findByFeedOwner(optional.get(), pageable);
+            posts.addAll(page.getContent().stream().map(Feed::getPost).toList());
+        }
+        // 2. Fetch posts.
+        posts.addAll(postRepository.fetchFeedWithRelations(
+                sessionKey,
+                windowStart,
+                pageable.getPageSize(),
+                (int) pageable.getOffset()));
+        //
+        posts.sort((a, b) -> {
+            return -1 * a.getAt().compareTo(b.getAt());
+        });
+
+        // Extract post IDs
+        List<Long> postIds = posts.stream().map(Post::getId).toList();
+        // 2. Bulk fetch reactions for all posts in the feed
+        List<Reaction> reactions = reactionRepository.findByPostIds(postIds);
+        // 3. Group reactions by postId
+        Map<Long, List<Reaction>> reactionsByPost = ReactionService.groupReactionsByPost(reactions);
+        // 4. Map feed entries to DTOs
+        List<PostDTO> feeds = posts.stream().map(post -> {
+            List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
+            ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions,
+                    optional.map(Channel::getId).orElse(null));
+            return PostDTO.from(post, summary);
+        }).toList();
+
+        return new FeedPageDTO<PostDTO>(feeds, sessionKey, windowStart, pageable.getPageNumber(),
+                pageable.getSort().stream()
+                        .map(order -> new SortDTO(order.getProperty(), order.getDirection().name()))
+                        .toList());
+    }
+
+    /**
+     * Retrieves a pageable list of validated posts enriched with:
+     * - minimal channel information (via EntityGraph on the repository)
+     * - attached files (also via EntityGraph)
+     * - aggregated reaction summaries (emoji → count + current user reaction)
+     * - commentCount already stored on Post (no comment fetching required)
+     *
+     * <p>
+     * This method avoids N+1 queries by:
+     * 1. Fetching posts with channel + files in a single query
+     * 2. Fetching all reactions for all posts in one bulk query
+     * 3. Building reaction summaries in memory
+     * 4. Mapping everything into PostDTO objects
+     * </p>
+     * 
+     * @param pageable
+     * @return
+     */
+    public PageDTO<FeedDTO> getFeed(Pageable pageable) {
+        // 1. Fetch feed entries with posts, channels, and files
+        Optional<Channel> optional = channelService.findOneByCurrentUser();
+        List<Feed> feeds = new ArrayList<>();
+        if (optional.isPresent()) {
+            log.debug("Request to retrieve Feeds for Channel {}.", optional.get());
+            // Fetch feed entries with posts, channels, and files
+            var page = feedRepository.findByFeedOwner(optional.get(), pageable);
+            feeds = new ArrayList<>(page.getContent());
+        }
+        // 2. Fetch post feeds.
+        feeds.addAll(this.postRepository.findByStatusOrderByAtDesc(
+                Status.VALIDATED,
+                pageable).getContent().stream().map(post -> {
+                    var feed = new Feed();
+                    feed.setPost(post);
+                    return feed;
+                }).toList());
+        // [TODO] Get recommended posts (assuming a method to fetch recommendations
+        feeds.sort((a, b) -> {
+            return -1 * a.getPost().getAt().compareTo(b.getPost().getAt());
+        });
+
+        // Extract post IDs
+        List<Long> postIds = feeds.stream()
+                .map(f -> f.getPost().getId())
+                .toList();
+        // 2. Bulk fetch reactions for all posts in the feed
+        List<Reaction> reactions = reactionRepository.findByPostIds(postIds);
+        // 3. Group reactions by postId
+        Map<Long, List<Reaction>> reactionsByPost = ReactionService.groupReactionsByPost(reactions);
+        // 4. Map feed entries to DTOs
+        List<FeedDTO> feedDTOs = feeds.stream().map(feed -> {
+            var post = feed.getPost();
+            List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
+            ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions,
+                    optional.map(Channel::getId).orElse(null));
+            return FeedDTO.from(feed.getId(), PostDTO.from(post, summary));
+        }).toList();
+
+        Page<FeedDTO> page = new PageImpl<>(feedDTOs, pageable, feedDTOs.size());
+        return PageDTO.from(page);
     }
 
 }

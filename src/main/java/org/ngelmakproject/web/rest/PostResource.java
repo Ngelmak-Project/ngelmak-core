@@ -2,6 +2,7 @@ package org.ngelmakproject.web.rest;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -9,6 +10,7 @@ import java.util.concurrent.TimeUnit;
 import org.ngelmakproject.domain.File;
 import org.ngelmakproject.domain.Post;
 import org.ngelmakproject.service.PostService;
+import org.ngelmakproject.web.rest.dto.FeedPageDTO;
 import org.ngelmakproject.web.rest.dto.PageDTO;
 import org.ngelmakproject.web.rest.dto.PostDTO;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
@@ -130,7 +132,7 @@ public class PostResource {
      * {@code GET  /posts/channel/:id} : get all the posts.
      *
      * @param channelId of the Post to get.
-     * @param pageable the pagination information.
+     * @param pageable  the pagination information.
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and the list
      *         of posts in body.
      */
@@ -175,6 +177,32 @@ public class PostResource {
     // TimeUnit.SECONDS))
     // .body(postService.fullTextSearch(query, pageable));
     // }
+
+    /**
+     * {@code GET  /feeds?q=} : get all the feeds.
+     *
+     * @param pageable the pagination information.
+     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and the list
+     *         of feeds in body.
+     */
+    @GetMapping("/feeds")
+    public ResponseEntity<FeedPageDTO<PostDTO>> getFeeds(
+            @RequestParam(value = "q", defaultValue = "") String query,
+            @RequestParam(required = false) String sessionKey,
+            Pageable pageable) {
+        log.debug("REST request to get a page of Feeds : {}, sessionKey={}", query, sessionKey);
+
+        // If no session key provided → generate timestamp
+        if (sessionKey == null) {
+            sessionKey = String.valueOf(Instant.now().getEpochSecond());
+        }
+
+        FeedPageDTO<PostDTO> pageDTO = postService.getFeed(pageable, sessionKey);
+
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.maxAge(60, TimeUnit.SECONDS))
+                .body(pageDTO);
+    }
 
     /**
      * {@code GET  /posts/:id} : get the "id" post.
