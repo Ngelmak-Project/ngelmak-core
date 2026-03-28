@@ -1,4 +1,5 @@
-# Getting Started
+# 📘 **Feed Query Performance Guide**
+This document explains how to optimize the feed‑ranking SQL query by using the correct PostgreSQL indexes—specifically an index on the `at` timestamp column. Because the feed query always filters on a time window, indexing this column is essential for performance at scale.
 
 ### Reference Documentation
 
@@ -394,3 +395,137 @@ ngelmak_project=# \dt
 ```
 
 Please refers to [PostgreSQL tutorial for more details](https://www.postgresqltutorial.com/postgresql-getting-started/connect-to-postgresql-database/).
+
+
+Here’s a polished, developer‑friendly **help.md** that explains exactly how to index `at` for optimal performance, why it matters, and how to use it with your feed‑ranking query. It’s written as if it belongs in a real project’s documentation—clear, structured, and actionable.
+
+---
+
+
+# 🚀 Why Indexing Matters
+The feed query begins with:
+
+```sql
+WHERE p.at >= :windowStart
+```
+
+This is a **range filter** on a timestamp column. Without an index, PostgreSQL must scan the entire `nk_post` table, which becomes prohibitively slow as the table grows.
+
+A proper index allows PostgreSQL to:
+
+- Jump directly to the first row inside the time window  
+- Avoid scanning older posts  
+- Reduce heap reads  
+- Improve ORDER BY performance by reducing the candidate set  
+
+This is the single most important optimization for the feed.
+
+---
+
+# 🧱 Required Index
+
+## **1. Primary Index on `at`**
+This is the core index that makes the feed query fast.
+
+```sql
+CREATE INDEX idx_nk_post_at ON nk_post (at DESC);
+```
+
+### Why descending?
+Most feeds show **recent posts first**, and PostgreSQL can traverse a descending index more efficiently when scanning recent timestamps.
+
+### When this index is used
+- Any query filtering by `p.at >= :windowStart`
+- Any query ordering by recency
+- Any query that needs to quickly locate recent rows
+
+---
+
+# ⚡ Optional Enhancements
+
+## **2. Composite Index (Recommended for Large Tables)**
+If your table contains millions of rows, adding `comment_count` helps PostgreSQL reduce heap fetches during scoring.
+
+```sql
+CREATE INDEX idx_nk_post_at_comment
+    ON nk_post (at DESC, comment_count DESC);
+```
+
+### Why this helps
+Although the scoring formula cannot be indexed directly, including `comment_count` improves row locality and reduces the number of random disk reads.
+
+---
+
+## **3. Partial Index (If Feed Only Uses Recent Posts)**
+If your feed window is always something like “last 7–30 days”, a partial index is dramatically faster and smaller.
+
+```sql
+CREATE INDEX idx_nk_post_recent
+    ON nk_post (at DESC)
+    WHERE at >= NOW() - INTERVAL '30 days';
+```
+
+### Benefits
+- Much smaller index  
+- Faster scans  
+- Ideal for high‑traffic feeds  
+
+### When to use
+If your application **never** queries old posts for the feed.
+
+---
+
+# 🧪 How to Verify Index Usage
+
+Run:
+
+```sql
+EXPLAIN ANALYZE
+SELECT p.id
+FROM nk_post p
+WHERE p.at >= NOW() - INTERVAL '7 days'
+ORDER BY p.at DESC
+LIMIT 50;
+```
+
+Look for:
+
+- `Index Scan using idx_nk_post_at`
+- Low `Rows Removed by Filter`
+- Low `Heap Fetches`
+
+If you see `Seq Scan`, the index is not being used—usually due to:
+
+- Wrong data type  
+- Wrong operator  
+- Missing statistics  
+- Too small table (PostgreSQL prefers seq scan on tiny tables)  
+
+---
+
+# 🧭 Best Practices
+
+### ✔ Always store timestamps in UTC  
+Avoid timezone conversions inside the query.
+
+### ✔ Use `Instant` in Java  
+JPA binds it correctly as a timestamp.
+
+### ✔ Avoid casting in SQL  
+`CAST(:windowStart AS TIMESTAMP)` is unnecessary and can block index usage.
+
+### ✔ Keep the feed window reasonable  
+The smaller the window, the fewer rows PostgreSQL must score.
+
+---
+
+# 🏁 Summary
+
+| Goal | Index |
+|------|--------|
+| Fast filtering by timestamp | `CREATE INDEX idx_nk_post_at ON nk_post(at DESC);` |
+| Improve scoring performance | `CREATE INDEX idx_nk_post_at_comment ON nk_post(at DESC, comment_count DESC);` |
+| Optimize for recent-only feed | `CREATE INDEX idx_nk_post_recent ON nk_post(at DESC) WHERE at >= NOW() - INTERVAL '30 days';` |
+
+The **primary index on `at`** is mandatory.  
+The others are optional optimizations depending on your workload.

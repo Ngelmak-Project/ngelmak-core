@@ -114,6 +114,127 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			@Param("limit") int limit,
 			@Param("offset") int offset);
 
+	/**
+	 * Fetches a list of post IDs for the user feed using a scoring algorithm that
+	 * combines recency, exponential decay, comment count, and session-based
+	 * randomization. Uses a CTE to precompute timestamps.
+	 *
+	 * @param sessionKey  A session-specific key used to introduce deterministic
+	 *                    randomness.
+	 * @param windowStart The earliest timestamp from which posts should be
+	 *                    included.
+	 * @param limit       Maximum number of post IDs to return.
+	 * @param offset      Number of results to skip for pagination.
+	 * @return A list of post IDs ordered by the computed feed score.
+	 */
+	@Query(value = """
+			WITH params AS (
+			    SELECT
+			        EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) AS now_epoch,
+			        EXTRACT(EPOCH FROM :windowStart) AS window_epoch
+			)
+			SELECT p.id
+			FROM nk_post p
+			CROSS JOIN params
+			WHERE p.at >= :windowStart
+			ORDER BY (
+			        (
+			            (EXTRACT(EPOCH FROM p.at) - params.window_epoch) / 3600.0
+			        )
+			        * EXP(-((params.now_epoch - EXTRACT(EPOCH FROM p.at)) / 86400.0))
+			        * 2.0
+			    )
+			    + (LEAST(p.comment_count, 20) * 0.5)
+			    + (((hashtext(:sessionKey || '-' || p.id) % 1000) / 1000.0) * 100.0)
+			    DESC
+			LIMIT :limit OFFSET :offset
+			""", nativeQuery = true)
+	List<Long> fetchFeedPostIds(
+			@Param("sessionKey") String sessionKey,
+			@Param("windowStart") Instant windowStart,
+			@Param("limit") int limit,
+			@Param("offset") int offset);
+
+	/**
+	 * Fetches a list of post IDs for the user feed using epoch-based window start.
+	 * Applies a scoring algorithm combining recency, exponential decay, comment
+	 * count, and session-based randomization.
+	 *
+	 * @param sessionKey       A session-specific key used to introduce
+	 *                         deterministic randomness.
+	 * @param windowStartEpoch Epoch seconds representing the earliest allowed
+	 *                         timestamp.
+	 * @param limit            Maximum number of post IDs to return.
+	 * @param offset           Number of results to skip for pagination.
+	 * @return A list of post IDs ordered by the computed feed score.
+	 */
+	@Query(value = """
+			SELECT p.id
+			FROM nk_post p
+			WHERE p.at >= TO_TIMESTAMP(:windowStartEpoch)
+			ORDER BY (
+			        (
+			            (EXTRACT(EPOCH FROM p.at) - :windowStartEpoch) / 3600.0
+			        )
+			        * EXP(-((EXTRACT(EPOCH FROM NOW()) - EXTRACT(EPOCH FROM p.at)) / 86400.0))
+			        * 2.0
+			    )
+			    + (LEAST(p.comment_count, 20) * 0.5)
+			    + (((hashtext(:sessionKey || '-' || p.id) % 1000) / 1000.0) * 100.0)
+			    DESC
+			LIMIT :limit OFFSET :offset
+			""", nativeQuery = true)
+	List<Long> fetchFeedPostIds(
+			@Param("sessionKey") String sessionKey,
+			@Param("windowStartEpoch") long windowStartEpoch,
+			@Param("limit") int limit,
+			@Param("offset") int offset);
+
+	/**
+	 * Optimized version of the feed post ID fetcher.
+	 * Precomputes NOW() and window start epochs using a CTE for improved
+	 * performance.
+	 * Uses Instant for cleaner API and avoids unnecessary casting.
+	 *
+	 * @param sessionKey  A session-specific key used to introduce deterministic
+	 *                    randomness.
+	 * @param windowStart The earliest timestamp from which posts should be
+	 *                    included.
+	 * @param limit       Maximum number of post IDs to return.
+	 * @param offset      Number of results to skip for pagination.
+	 * @return A list of post IDs ordered by the optimized scoring algorithm.
+	 */
+	@Query(value = """
+			WITH params AS (
+			    SELECT
+			        EXTRACT(EPOCH FROM NOW()) AS now_epoch,
+			        EXTRACT(EPOCH FROM :windowStart) AS window_epoch
+			)
+			SELECT p.id
+			FROM nk_post p
+			CROSS JOIN params
+			WHERE p.at >= :windowStart
+			ORDER BY (
+			        (
+			            (EXTRACT(EPOCH FROM p.at) - params.window_epoch) / 3600.0
+			        )
+			        * EXP(-((params.now_epoch - EXTRACT(EPOCH FROM p.at)) / 86400.0))
+			        * 2.0
+			    )
+			    + (LEAST(p.comment_count, 20) * 0.5)
+			    + (((hashtext(:sessionKey || '-' || p.id) % 1000) / 1000.0) * 100.0)
+			    DESC
+			LIMIT :limit OFFSET :offset
+			""", nativeQuery = true)
+	List<Long> fetchFeedPostIdsOptimized(
+			@Param("sessionKey") String sessionKey,
+			@Param("windowStart") Instant windowStart,
+			@Param("limit") int limit,
+			@Param("offset") int offset);
+
+	@EntityGraph(attributePaths = { "channel", "files", "postReply" })
+	List<Post> findAllByIdIn(List<Long> ids);
+
 	@Query("""
 			SELECT p FROM Post p
 			LEFT JOIN FETCH p.postReply
@@ -121,8 +242,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			LEFT JOIN FETCH p.files
 			WHERE p.channel.id = :channelId
 			""")
-	Slice<Post> findByChannel(@Param("channelId") Long channelId,
-			Pageable pageable);
+	Slice<Post> findByChannel(@Param("channelId") Long channelId, Pageable pageable);
 
 	@Query("""
 			SELECT p FROM Post p

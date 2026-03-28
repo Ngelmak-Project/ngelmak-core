@@ -63,7 +63,7 @@ public class Comment implements Serializable {
     @JsonIncludeProperties(value = { "id" })
     private Channel channel;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
     @JsonIncludeProperties(value = { "id", "url" })
     private File file;
 
