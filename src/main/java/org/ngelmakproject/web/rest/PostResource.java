@@ -179,7 +179,12 @@ public class PostResource {
     // }
 
     /**
-     * {@code GET  /feeds?q=} : get all the feeds.
+     * {@code GET  /feeds?q=} : retrieve the feed of the connected user, with
+     * optional search query.
+     * Session key is used to identify the feed session, allowing to keep track of
+     * the posts already seen by the user, and to provide a consistent feed across
+     * multiple requests. If no session key is provided, a new one is generated
+     * based on the current timestamp, ensuring that the user receives a fresh feed.
      *
      * @param pageable the pagination information.
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and the list
@@ -197,7 +202,9 @@ public class PostResource {
             sessionKey = String.valueOf(Instant.now().getEpochSecond());
         }
 
-        FeedPageDTO<PostDTO> pageDTO = postService.getFeed(pageable, sessionKey);
+        // If query is blank, get feed, else search in feed.
+        FeedPageDTO<PostDTO> pageDTO = query.isBlank() ? postService.getFeed(sessionKey, pageable)
+                : postService.searchFullText(query.trim(), pageable);
 
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.maxAge(60, TimeUnit.SECONDS))

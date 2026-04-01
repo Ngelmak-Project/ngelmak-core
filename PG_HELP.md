@@ -32,7 +32,7 @@ sudo systemctl restart postgresql
 
 ### 1.3 Basic Administration
 
-```sql
+```bash
 ALTER USER postgres PASSWORD '<password>';
 CREATE USER <username> WITH PASSWORD '<password>';
 CREATE DATABASE <database_name> OWNER <username>;
@@ -46,7 +46,7 @@ Feed retrieval relies on timestamp‑based filtering. PostgreSQL must be able to
 
 ### 2.1 Timestamp Index
 
-```sql
+```bash
 CREATE INDEX idx_nk_post_at ON nk_post (at DESC);
 ```
 
@@ -58,7 +58,7 @@ This index supports:
 
 ### 2.2 Composite Index (Optional)
 
-```sql
+```bash
 CREATE INDEX idx_nk_post_at_comment
 ON nk_post (at DESC, comment_count DESC);
 ```
@@ -67,7 +67,7 @@ Useful when scoring incorporates both recency and engagement metrics.
 
 ### 2.3 Partial Index (Optional)
 
-```sql
+```bash
 CREATE INDEX idx_nk_post_recent
 ON nk_post (at DESC)
 WHERE at >= NOW() - INTERVAL '30 days';
@@ -106,19 +106,30 @@ The configuration includes:
 
 ### 3.1 Search Vector Column
 
-```sql
+```bash
 ALTER TABLE nk_post
 ADD COLUMN textsearchable_index_col tsvector
 GENERATED ALWAYS AS (
-    setweight(to_tsvector('french', title), 'A') ||
-    setweight(to_tsvector('french', content), 'B') ||
+    setweight(to_tsvector('french', content), 'A')
+) STORED;
+```
+
+- Weight `'A'` gives it the highest priority in ranking, but you can change it if you prefer.
+
+Or if the `keywords` is used :
+
+```bash
+ALTER TABLE nk_post
+ADD COLUMN textsearchable_index_col tsvector
+GENERATED ALWAYS AS (
+    setweight(to_tsvector('french', content), 'A') ||
     setweight(to_tsvector('french', coalesce(keywords, '')), 'D')
 ) STORED;
 ```
 
 ### 3.2 GIN Index
 
-```sql
+```bash
 CREATE INDEX nk_post_textsearch_idx
 ON nk_post USING GIN (textsearchable_index_col);
 ```
@@ -127,23 +138,44 @@ ON nk_post USING GIN (textsearchable_index_col);
 
 Queries using:
 
-```sql
-textsearchable_index_col @@ websearch_to_tsquery('french', :fullText)
+```bash
+SELECT id,
+       content,
+       ts_rank_cd(textsearchable_index_col, query) AS rank
+FROM nk_post,
+     websearch_to_tsquery('french', 'hello') AS query
+WHERE status = 'VALIDATED'
+  AND textsearchable_index_col @@ query
+ORDER BY rank DESC
+LIMIT 10;
 ```
 
-produce:
+- **Bitmap Index Scan** using `nk_post_textsearch_idx`
+- **Bitmap Heap Scan** to load the matching rows
+- **Relevance ranking** computed with `ts_rank_cd`
 
-- `Bitmap Index Scan` on `nk_post_textsearch_idx`
-- `Bitmap Heap Scan` on matching rows
-- Ranking via `ts_rank_cd`
+#### Example Query Plan (Condensed):
 
-Example plan excerpt:
-
+```bash
+EXPLAIN ANALYZE
+SELECT id,
+       content,
+       ts_rank_cd(textsearchable_index_col, query) AS rank
+FROM nk_post,
+     websearch_to_tsquery('french', 'hello') AS query
+WHERE status = 'VALIDATED'
+  AND textsearchable_index_col @@ query
+ORDER BY rank DESC
+LIMIT 10;
 ```
+
+```bash
 Bitmap Index Scan on nk_post_textsearch_idx
-  Index Cond: (textsearchable_index_col @@ query)
-Bitmap Heap Scan
-  Recheck Cond: ...
+Bitmap Heap Scan on nk_post
+Sort by ts_rank_cd DESC
+Limit 10
+Planning Time: 0.147 ms
+Execution Time: 0.065 ms
 ```
 
 ---
@@ -155,13 +187,14 @@ Hydration, channel resolution, and reaction aggregation occur in the application
 
 ### 4.1 SQL
 
-```sql
+```bash
 SELECT p.id
-FROM nk_post p, websearch_to_tsquery('french', :fullText) query
+FROM nk_post p,
+        websearch_to_tsquery('french', :fullText) AS query
 WHERE p.status = 'VALIDATED'
-  AND p.textsearchable_index_col @@ query
+    AND p.textsearchable_index_col @@ query
 ORDER BY ts_rank_cd(p.textsearchable_index_col, query) DESC
-LIMIT :limit OFFSET :offset;
+LIMIT :limit OFFSET :offset
 ```
 
 This structure ensures:
@@ -181,21 +214,23 @@ This structure ensures:
 public interface PostSearchRepository {
 
     @Query(
-        value = """
-            SELECT p.id
-            FROM nk_post p, websearch_to_tsquery('french', :fullText) query
-            WHERE p.status = 'VALIDATED'
-              AND p.textsearchable_index_col @@ query
-            ORDER BY ts_rank_cd(p.textsearchable_index_col, query) DESC
-            LIMIT :limit OFFSET :offset
+    value = """
+        SELECT p.id
+        FROM nk_post p,
+             websearch_to_tsquery('french', :fullText) AS query
+        WHERE p.status = 'VALIDATED'
+          AND p.textsearchable_index_col @@ query
+        ORDER BY ts_rank_cd(p.textsearchable_index_col, query) DESC
+        LIMIT :limit OFFSET :offset
         """,
-        nativeQuery = true
+    nativeQuery = true
     )
-    List<Long> searchIds(
-        @Param("fullText") String fullText,
-        @Param("limit") int limit,
-        @Param("offset") int offset
+    List<Long> searchFullText(
+            @Param("fullText") String fullText,
+            @Param("limit") int limit,
+            @Param("offset") int offset
     );
+
 }
 ```
 
@@ -239,23 +274,26 @@ public PageDTO<PostDTO> fullTextSearch(String fullText, Pageable pageable) {
 
 ## 6. Query Planning Notes
 
-### 6.1 Bitmap Index Scan  
+### 6.1 Bitmap Index Scan
+
 Used when many rows match the search condition.  
 Combines index results efficiently before accessing heap pages.
 
-### 6.2 Index Scan  
+### 6.2 Index Scan
+
 Used when the planner estimates a small number of matching rows.  
 Traverses index entries directly.
 
-### 6.3 Sequential Scan  
+### 6.3 Sequential Scan
+
 Occurs when:
 
-- No matching index exists  
-- The planner estimates low selectivity  
-- The table is small  
+- No matching index exists
+- The planner estimates low selectivity
+- The table is small
 
 Avoided by ensuring:
 
-- Matching operator classes (`@@` for GIN)  
-- Accurate statistics (`ANALYZE`)  
-- Correct index predicates  
+- Matching operator classes (`@@` for GIN)
+- Accurate statistics (`ANALYZE`)
+- Correct index predicates

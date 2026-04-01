@@ -155,10 +155,3 @@ Ngelmak-Thruline-Core/
 
 This project is licensed under the MIT License.  
 Feel free to use and adapt it for your own microservice architecture.
-
----
-```
-
----
-
-Would you like me to also add a **Mermaid diagram** showing how Thruline Core interacts with Postgres, Vault, and (eventually) RabbitMQ/Kafka? That could make the README more visual and easier to understand.

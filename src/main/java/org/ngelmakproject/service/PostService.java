@@ -415,10 +415,10 @@ public class PostService {
         }
         // 2. Fetch posts.
         posts.addAll(postRepository.fetchFeedWithRelations(
-        sessionKey,
-        windowStart,
-        pageable.getPageSize(),
-        (int) pageable.getOffset()));
+                sessionKey,
+                windowStart,
+                pageable.getPageSize(),
+                (int) pageable.getOffset()));
         //
         posts.sort((a, b) -> {
             return -1 * a.getAt().compareTo(b.getAt());
@@ -443,7 +443,6 @@ public class PostService {
                         .map(order -> new SortDTO(order.getProperty(), order.getDirection().name()))
                         .toList());
     }
-
 
     public FeedPageDTO<PostDTO> getFeedV2(Pageable pageable, String sessionKey) {
         // If no session key provided → generate timestamp
@@ -461,10 +460,10 @@ public class PostService {
         }
         // 2. Fetch posts.
         posts.addAll(postRepository.fetchFeedWithRelations(
-        sessionKey,
-        windowStart,
-        pageable.getPageSize(),
-        (int) pageable.getOffset()));
+                sessionKey,
+                windowStart,
+                pageable.getPageSize(),
+                (int) pageable.getOffset()));
         //
         posts.sort((a, b) -> {
             return -1 * a.getAt().compareTo(b.getAt());
@@ -490,8 +489,7 @@ public class PostService {
                         .toList());
     }
 
-
-    public FeedPageDTO<PostDTO> getFeed(Pageable pageable, String sessionKey) {
+    public FeedPageDTO<PostDTO> getFeed(String sessionKey, Pageable pageable) {
         // If no session key provided → generate timestamp
         if (sessionKey == null || sessionKey.isBlank()) {
             sessionKey = String.valueOf(Instant.now().getEpochSecond());
@@ -532,6 +530,58 @@ public class PostService {
         }).toList();
 
         return new FeedPageDTO<PostDTO>(feeds, sessionKey, pageable.getPageNumber(),
+                pageable.getSort().stream()
+                        .map(order -> new SortDTO(order.getProperty(), order.getDirection().name()))
+                        .toList());
+    }
+
+    /**
+     * This method performs a full-text search on posts based on the provided query
+     * and pagination information. It retrieves posts that match the search
+     * criteria, along with their associated channels, files, and reactions. The
+     * method avoids N+1 queries by fetching all necessary data in bulk and then
+     * mapping it into PostDTO objects.
+     * 
+     * @param query    the full-text search query to filter posts.
+     * @param pageable the pagination information.
+     * @return the paginated list of posts matching the search criteria.
+     */
+    public FeedPageDTO<PostDTO> searchFullText(String query, Pageable pageable) {
+        // 1. Fetch feed entries with posts, channels, and files
+        Optional<Channel> optional = channelService.findOneByCurrentUser();
+        List<Post> posts = new ArrayList<>();
+        if (optional.isPresent()) {
+            log.debug("Request to retrieve Feeds for Channel {}.", optional.get());
+            // Fetch feed entries with posts, channels, and files
+            var page = feedRepository.findByFeedOwner(optional.get(), pageable);
+            posts.addAll(page.getContent().stream().map(Feed::getPost).toList());
+        }
+        // 2. Fetch posts.
+        List<Long> ids = postRepository.searchFullText(
+                query,
+                pageable.getPageSize(),
+                (int) pageable.getOffset());
+        posts.addAll(postRepository.findAllByIdIn(ids));
+        //
+        posts.sort((a, b) -> {
+            return -1 * a.getAt().compareTo(b.getAt());
+        });
+
+        // Extract post IDs
+        List<Long> postIds = posts.stream().map(Post::getId).toList();
+        // 2. Bulk fetch reactions for all posts in the feed
+        List<Reaction> reactions = reactionRepository.findByPostIds(postIds);
+        // 3. Group reactions by postId
+        Map<Long, List<Reaction>> reactionsByPost = ReactionService.groupReactionsByPost(reactions);
+        // 4. Map feed entries to DTOs
+        List<PostDTO> feeds = posts.stream().map(post -> {
+            List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
+            ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions,
+                    optional.map(Channel::getId).orElse(null));
+            return PostDTO.from(post, summary);
+        }).toList();
+
+        return new FeedPageDTO<PostDTO>(feeds, null, pageable.getPageNumber(),
                 pageable.getSort().stream()
                         .map(order -> new SortDTO(order.getProperty(), order.getDirection().name()))
                         .toList());
