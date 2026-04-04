@@ -1,5 +1,6 @@
 package org.ngelmakproject.service;
 
+import java.text.Normalizer;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -46,68 +47,122 @@ public class ChannelService {
     }
 
     /**
-     * Save a channel.
+     * Creates a new channel for the authenticated user.
      *
-     * @param channel the entity to save.
-     * @return the persisted entity.
+     * <p>
+     * The method:
+     * </p>
+     * <ul>
+     * <li>assigns the current user as the owner</li>
+     * <li>generates a unique identifier based on the channel name</li>
+     * <li>sets creation metadata</li>
+     * <li>persists the channel</li>
+     * </ul>
+     *
+     * @param channel the channel to create
+     * @return the persisted channel
      */
     public Channel save(Channel channel) {
         log.info("Request to save Channel : {}", channel);
 
-        /*
-         * 1. Set the currently authenticated user as the owner of the channel to be
-         * created.
-         */
-        // Retrieve ID of the user if authenticated or throught exception
-        Long userId = UserService.getAuthenticatedUser().map(user -> user.id())
+        // Assign owner
+        Long userId = UserService.getAuthenticatedUser()
+                .map(user -> user.id())
                 .orElseThrow(() -> new UnauthorizedResourceAccessException(channel.getId(), ENTITY_NAME));
         channel.setUser(userId);
-        /* 2. channel creation */
-        String identifier = channel.getName().toLowerCase().trim()
-                .replaceAll("[^a-z0-9]+", "-") // replace groups of non-alphanumerics
-                .replaceAll("^-|-$", ""); // remove leading/trailing hyphens
-        int counter = 1;
-        String base = identifier;
-        while (channelRepository.existsByIdentifier(identifier)) {
-            identifier = base + "-" + counter++;
-        }
-        channel.setIdentifier(identifier);
+
+        // Generate identifier + metadata
+        channel.setIdentifier(generateUniqueIdentifier(channel.getName()));
         channel.setCreatedAt(Instant.now());
+
         return channelRepository.save(channel);
     }
 
     /**
-     * Update a channel.
+     * Updates the current user's channel.
      *
-     * @param channel the entity to save.
-     * @return the persisted entity.
+     * <p>
+     * When the channel name changes, a new unique identifier is generated.
+     * Other fields are updated only if provided.
+     * </p>
+     *
+     * @param channel the updated fields
+     * @return the persisted channel
      */
     public Channel update(Channel channel) {
         log.debug("Request to update Channel : {}", channel);
-
-        return findOneByCurrentUser().map(existingChannel -> {
-            if (channel.getIdentifier() != null) {
-                existingChannel.setIdentifier(channel.getIdentifier());
-            }
-            if (channel.getName() != null) {
-                existingChannel.setName(channel.getName());
-            }
-            if (channel.getAvatar() != null) {
-                existingChannel.setAvatar(channel.getAvatar());
-            }
-            if (channel.getBanner() != null) {
-                existingChannel.setBanner(channel.getBanner());
-            }
-            if (channel.getCreatedAt() != null) {
-                existingChannel.setCreatedAt(channel.getCreatedAt());
-            }
-            if (channel.getDescription() != null) {
-                existingChannel.setDescription(channel.getDescription());
-            }
-
-            return existingChannel;
-        }).map(channelRepository::save)
+        return findOneByCurrentUser()
+                .map(existingChannel -> {
+                    // Name changed → regenerate identifier
+                    if (channel.getName() != null &&
+                            !channel.getName().equals(existingChannel.getName())) {
+                        existingChannel.setName(channel.getName());
+                        existingChannel.setIdentifier(generateUniqueIdentifier(channel.getName()));
+                    }
+                    if (channel.getAvatar() != null)
+                        existingChannel.setAvatar(channel.getAvatar());
+                    if (channel.getBanner() != null)
+                        existingChannel.setBanner(channel.getBanner());
+                    if (channel.getCreatedAt() != null)
+                        existingChannel.setCreatedAt(channel.getCreatedAt());
+                    if (channel.getDescription() != null)
+                        existingChannel.setDescription(channel.getDescription());
+                    return existingChannel;
+                })
+                .map(channelRepository::save)
                 .orElseThrow(ChannelNotFoundException::new);
+    }
+
+    /**
+     * Generates a clean, URL‑friendly, SEO‑friendly, and unique identifier (slug)
+     * for a channel based on its name.
+     *
+     * <p>
+     * The method performs:
+     * </p>
+     * <ul>
+     * <li>Unicode normalization (é → e, ö → o, etc.)</li>
+     * <li>Emoji and symbol removal</li>
+     * <li>Lowercasing and trimming</li>
+     * <li>Replacing non‑alphanumeric groups with hyphens</li>
+     * <li>Removing duplicate or trailing hyphens</li>
+     * <li>Ensuring uniqueness by appending "-1", "-2", ...</li>
+     * </ul>
+     *
+     * <h4>Example</h4>
+     * 
+     * <pre>
+     * Input:  "  🎉 My Amazing Chánnel!!!  "
+     * Output: "my-amazing-channel"
+     *
+     * If "my-amazing-channel" already exists:
+     * Output: "my-amazing-channel-1"
+     * </pre>
+     *
+     * @param name the channel name to convert into a unique identifier
+     * @return a unique, normalized slug
+     */
+    public String generateUniqueIdentifier(String name) {
+        // Normalize accents (é → e, ç → c, ü → u)
+        String normalized = Normalizer.normalize(name, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", ""); // remove diacritics
+        // Remove emojis and symbols
+        normalized = normalized.replaceAll("[^\\p{Alnum}\\s-]", "");
+        // Lowercase, trim, replace non-alphanumeric groups with hyphens
+        String identifier = normalized.toLowerCase().trim()
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("^-|-$", ""); // remove leading/trailing hyphens
+        // Fallback if everything was removed
+        if (identifier.isBlank()) {
+            identifier = "channel";
+        }
+        // Ensure uniqueness
+        String base = identifier;
+        int counter = 1;
+        while (channelRepository.existsByIdentifier(identifier)) {
+            identifier = base + "-" + counter++;
+        }
+        return identifier;
     }
 
     /**
