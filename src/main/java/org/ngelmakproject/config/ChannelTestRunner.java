@@ -20,7 +20,7 @@ public class ChannelTestRunner implements CommandLineRunner {
     public void run(String... args) {
         System.out.println("=== Channel Test Runner Started ===");
         channelRepository.findAll().stream()
-            .filter(channel -> channel.getIdentifier() != null || channel.getIdentifier().isEmpty())
+            .filter(channel -> channel.getIdentifier() == null || channel.getIdentifier().isEmpty())
             .map(e -> {
                 e.setIdentifier(channelService.generateUniqueIdentifier(e.getName()));
                 return channelRepository.save(e);
