@@ -61,7 +61,6 @@ public class Post implements Serializable {
     @Column(name = "visibility")
     private Visibility visibility;
 
-    @Lob
     @Column(name = "content", columnDefinition = "TEXT", nullable = false)
     @Size(max = 10000)
     private String content; /** The content of the post. */
