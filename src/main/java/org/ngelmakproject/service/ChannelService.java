@@ -193,6 +193,21 @@ public class ChannelService {
     }
 
     /**
+     * Get one channel by identifier.
+     *
+     * @param identifier the identifier of the entity.
+     * @return the entity.
+     */
+    @Transactional(readOnly = true)
+    public Optional<ChannelDTO> findOneByIdentifier(String identifier) {
+        log.debug("Request to get Channel : {}", identifier);
+        return channelRepository.findOneByIdentifier(identifier).map(channel -> {
+            var stats = getSubscriptionStatistics(channel.getId());
+            return ChannelDTO.from(channel, stats);
+        });
+    }
+
+    /**
      * Retrieves the Channel associated with the currently authenticated user.
      *
      * <p>

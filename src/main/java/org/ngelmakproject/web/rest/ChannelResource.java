@@ -140,16 +140,22 @@ public class ChannelResource {
     }
 
     /**
-     * {@code GET  /channels/:id} : get the "id" channel.
+     * {@code GET  /channels/:value} : get the Channel by id or identifier.
      *
-     * @param id the id of the channel to retrieve.
+     * @param value the id or identifier of the channel to retrieve.
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body
      *         the channel, or with status {@code 404 (Not Found)}.
      */
-    @GetMapping("/{id}")
-    public ResponseEntity<ChannelDTO> getChannel(@PathVariable Long id) {
-        log.debug("REST request to get Channel : {}", id);
-        return ResponseUtil.wrapOrNotFound(channelService.findOne(id));
+    @GetMapping("/{value}")
+    public ResponseEntity<ChannelDTO> getChannel(@PathVariable Object value) {
+        log.debug("REST request to get Channel : {}", value);
+        if (value instanceof String) {
+            return ResponseUtil.wrapOrNotFound(channelService.findOneByIdentifier((String) value));
+        } else if (value instanceof Long) {
+            return ResponseUtil.wrapOrNotFound(channelService.findOne((Long) value));
+        } else {
+            throw new ChannelResourceException("Invalid channel identifier: " + value);
+        }
     }
 
     /**

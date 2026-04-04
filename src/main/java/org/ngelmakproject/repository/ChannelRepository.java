@@ -14,5 +14,7 @@ import org.springframework.stereotype.Repository;
 public interface ChannelRepository extends JpaRepository<Channel, Long> {
     Optional<Channel> findOneByUser(Long id);
 
+    Optional<Channel> findOneByIdentifier(String identifier);
+
     Boolean existsByIdentifier(String identifier);
 }
