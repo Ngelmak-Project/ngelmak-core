@@ -23,48 +23,50 @@ import jakarta.servlet.http.HttpServletResponse;
 @Component
 public class GatewayAuthenticationFilter extends OncePerRequestFilter {
 
-  private static final Logger log = LoggerFactory.getLogger(GatewayAuthenticationFilter.class);
+	private static final Logger log = LoggerFactory.getLogger(GatewayAuthenticationFilter.class);
 
-  @Override
-  protected void doFilterInternal(HttpServletRequest request,
-      HttpServletResponse response,
-      FilterChain filterChain)
-      throws ServletException, IOException {
+	@Override
+	protected void doFilterInternal(HttpServletRequest request,
+			HttpServletResponse response,
+			FilterChain filterChain)
+			throws ServletException, IOException {
 
-    String method = request.getMethod();
+		String method = request.getMethod();
 
-    String userId = request.getHeader("X-User-Id");
-    String login = request.getHeader("X-User-Login");
-    String authoritiesStr = request.getHeader("X-User-Authorities");
+		String userId = request.getHeader("X-User-Id");
+		String login = request.getHeader("X-User-Login");
+		String authoritiesStr = request.getHeader("X-User-Authorities");
 
-    // Only show log authentication on POST, PUT, DELETE
-    if (!method.equals("POST") && !method.equals("PUT") && !method.equals("DELETE")) {
-      log.info("\n" +
-          "========< Gateway Auth Filter >=========\n" +
-          "Method             : {}\n" +
-          "X-User-Id          : {}\n" +
-          "X-User-Login       : {}\n" +
-          "X-User-Authorities : {}\n" +
-          "========================================",
-          method, userId, login, authoritiesStr);
-    }
+		// Only show log authentication on POST, PUT, DELETE
+		if (!method.equals("POST") && !method.equals("PUT") && !method.equals("DELETE")) {
+			log.info("""
+					"========< Gateway Auth Filter >=========
+					"Method             : {}
+					"X-User-Id          : {}
+					"X-User-Login       : {}
+					"X-User-Authorities : {}
+					"========================================
+					""",
+					method, userId, login, authoritiesStr);
+		}
 
-    if (userId != null && login != null && authoritiesStr != null) {
+		if (userId != null && login != null && authoritiesStr != null) {
 
-      Set<String> roles = Arrays.stream(authoritiesStr.split(","))
-          .collect(Collectors.toSet());
+			Set<String> roles = Arrays.stream(authoritiesStr.split(","))
+					.collect(Collectors.toSet());
 
-      UserPrincipal principal = new UserPrincipal(Long.parseLong(userId), login, roles);
+			UserPrincipal principal = new UserPrincipal(Long.parseLong(userId), login, roles);
 
-      List<SimpleGrantedAuthority> authorities = roles.stream()
-          .map(SimpleGrantedAuthority::new)
-          .toList();
+			List<SimpleGrantedAuthority> authorities = roles.stream()
+					.map(SimpleGrantedAuthority::new)
+					.toList();
 
-      UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(principal, null, authorities);
+			UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(principal, null,
+					authorities);
 
-      SecurityContextHolder.getContext().setAuthentication(auth);
-    }
+			SecurityContextHolder.getContext().setAuthentication(auth);
+		}
 
-    filterChain.doFilter(request, response);
-  }
+		filterChain.doFilter(request, response);
+	}
 }

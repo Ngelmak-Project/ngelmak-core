@@ -114,21 +114,6 @@ public class PostResource {
     }
 
     /**
-     * {@code GET  /posts?q=} : get all the posts.
-     *
-     * @param pageable the pagination information.
-     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and the list
-     *         of posts in body.
-     */
-    @GetMapping("")
-    public ResponseEntity<PageDTO<Post>> getAllPosts(@RequestParam(value = "q", defaultValue = "") String query,
-            Pageable pageable) {
-        log.debug("REST request to get a page of Posts : {}", query);
-        return ResponseEntity.ok().cacheControl(CacheControl.maxAge(60, TimeUnit.SECONDS))
-                .body(postService.findAll(query, pageable));
-    }
-
-    /**
      * {@code GET  /posts/channel/:id} : get all the posts.
      *
      * @param channelId of the Post to get.

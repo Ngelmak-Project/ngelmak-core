@@ -19,11 +19,13 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
+import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 /**
  * The Post entity.
@@ -59,8 +61,10 @@ public class Post implements Serializable {
     @Column(name = "visibility")
     private Visibility visibility;
 
-    @Column(name = "content", nullable = false)
-    private String content;
+    @Lob
+    @Column(name = "content", columnDefinition = "TEXT", nullable = false)
+    @Size(max = 10000)
+    private String content; /** The content of the post. */
 
     @NotNull
     @Enumerated(EnumType.STRING)
@@ -76,8 +80,7 @@ public class Post implements Serializable {
     @JsonIncludeProperties(value = { "id", "identifier", "name", "avatar" })
     private Channel channel;
 
-    @ManyToMany(cascade = CascadeType.REMOVE) // [TODO] Make sure not to delete the file before checking first if it has
-                                              // being used by another resource.
+    @ManyToMany
     @JoinTable(name = "nk_post_file", joinColumns = {
             @JoinColumn(name = "post_id", referencedColumnName = "id") }, inverseJoinColumns = {
                     @JoinColumn(name = "file_id", referencedColumnName = "id") })

@@ -9,12 +9,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.ngelmakproject.config.Constants;
 import org.ngelmakproject.domain.Channel;
 import org.ngelmakproject.domain.Feed;
 import org.ngelmakproject.domain.File;
 import org.ngelmakproject.domain.Post;
 import org.ngelmakproject.domain.Post.Status;
-import org.ngelmakproject.domain.Post.Visibility;
 import org.ngelmakproject.domain.Reaction;
 import org.ngelmakproject.repository.FeedRepository;
 import org.ngelmakproject.repository.PostRepository;
@@ -40,10 +40,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.Query;
-import jakarta.persistence.Tuple;
-
 /**
  * Service Implementation for managing
  * {@link org.ngelmakproject.domain.Post}.
@@ -61,7 +57,6 @@ public class PostService {
     private final FileService fileService;
     private final ChannelService channelService;
     private final ReactionRepository reactionRepository;
-    private final EntityManager entityManager;
     private final FeedRepository feedRepository;
     private final SubscriptionRepository subscriptionRepository;
 
@@ -70,114 +65,118 @@ public class PostService {
             ReactionRepository reactionRepository,
             ChannelService channelService,
             FeedRepository feedRepository,
-            SubscriptionRepository subscriptionRepository,
-            EntityManager entityManager) {
+            SubscriptionRepository subscriptionRepository) {
         this.postRepository = postRepository;
         this.reactionRepository = reactionRepository;
         this.feedRepository = feedRepository;
         this.fileService = fileService;
         this.subscriptionRepository = subscriptionRepository;
         this.channelService = channelService;
-        this.entityManager = entityManager;
     }
 
     /**
-     * Save a post.
+     * Saves a new Post.
      *
-     * @param post the entity to save.
-     * @return the persisted entity.
+     * @param post   the Post to create
+     * @param medias media files attached to the post
+     * @param covers cover images attached to the post
+     * @return the persisted Post
      */
     @Transactional
     public Post save(Post post, List<MultipartFile> medias, List<MultipartFile> covers) {
-        log.debug("Request to save Post : {} | {}x file(s) and {}x cover(s)", post, medias.size(), covers.size());
-        if (post.getContent().length() > 3000) {
-            throw new BadRequestAlertException("Contenu trop long > 3000 caractères.", ENTITY_NAME, "contentTooLong");
-        }
-        return channelService.findOneByCurrentUser().map(channel -> {
-            /* 1. we start by saving the files if exists */
-            List<File> files = fileService.save(medias, covers);
-            /* 2. then save the post with the attachments */
-            // [TODO] we will need to change the default status to match with the fact that
-            // some users can create posts that bypass some step validations.
-            post.status(Status.VALIDATED) // default status is PENDING
-                    .at(Instant.now()) // set the current time
-                    .files(new HashSet<File>(files)) // attach files to the post
-                    .channel(channel); // set the current connected user as owner of the post.
-            return postRepository.save(post);
-        }).orElseThrow(ChannelNotFoundException::new);
+        log.debug("Request to save Post : {} | {}x file(s) and {}x cover(s)",
+                post, medias.size(), covers.size());
+
+        // Validate content
+        validatePostContent(post.getContent());
+        return channelService.findOneByCurrentUser()
+                .map(channel -> {
+                    // Save media files
+                    List<File> files = fileService.save(medias, covers);
+                    // Prepare entity
+                    post.status(Status.VALIDATED)
+                            .at(Instant.now())
+                            .files(new HashSet<>(files))
+                            .channel(channel);
+                    // Persist
+                    return postRepository.save(post);
+                })
+                .orElseThrow(ChannelNotFoundException::new);
     }
 
     /**
-     * Update a post.
-     * This function can eventually delete some files through the given
-     * deletedFiles variable.
+     * Updates an existing Post.
+     * May also delete files listed in deletedMedias.
      *
-     * @param post the entity to save.
-     * @return the persisted entity.
+     * @param post          the Post containing updated fields
+     * @param deletedMedias files to remove
+     * @param medias        new media files to add
+     * @param covers        new cover files to add
+     * @return the updated Post
      */
     public Post update(Post post, List<File> deletedMedias,
             List<MultipartFile> medias, List<MultipartFile> covers) {
-        log.debug("Request to update Post : {} | {}x file(s), {}x cover(s), and {}x to be deleted", post, medias.size(),
-                covers.size(), deletedMedias.size());
-        if (post.getContent().length() > 3000) {
-            throw new BadRequestAlertException("Contenu trop long > 3000 caractères.", ENTITY_NAME, "contentTooLong");
-        }
-        return channelService.findOneByCurrentUser().map(channel -> {
-            return postRepository.findById(post.getId())
-                    .map(existingPost -> {
-                        if (channel.getId() != existingPost.getChannel().getId()) {
-                            throw new UnauthorizedResourceAccessException(channel.getUser(), existingPost.getId(),
-                                    ENTITY_NAME);
-                        }
-                        /* 1. we start by saving the files if exists */
-                        List<File> files = fileService.save(medias, covers);
-                        /* 2. update the existing post */
-                        existingPost.getFiles().addAll(files);
-                        if (post.getKeywords() != null) {
-                            existingPost.setKeywords(post.getKeywords());
-                        }
-                        if (post.getAt() != null) {
-                            existingPost.setAt(post.getAt());
-                        }
-                        if (post.getLastUpdate() != null) {
-                            existingPost.setLastUpdate(post.getLastUpdate());
-                        }
-                        if (post.getVisibility() != null) {
-                            existingPost.setVisibility(post.getVisibility());
-                        }
-                        if (post.getContent() != null) {
-                            existingPost.setContent(post.getContent());
-                        }
-                        if (post.getStatus() != null) {
-                            existingPost.setStatus(post.getStatus());
-                        }
-                        postRepository.save(existingPost);
-                        /* 3. delete removed files */
-                        // [WARN] make sure to delete files only when all other actions are successfully
-                        // completed. Since the deleted actions of file may have actions that cannot be
-                        // cancelled, like removing files.
-                        fileService.delete(deletedMedias);
 
-                        return existingPost;
-                    })
-                    .orElseThrow(() -> new ResourceNotFoundException("Entity not found", ENTITY_NAME, "idnotfound"));
-        }).orElseThrow(ChannelNotFoundException::new);
+        log.debug("Request to update Post : {} | {}x file(s), {}x cover(s), {}x to delete",
+                post, medias.size(), covers.size(), deletedMedias.size());
+
+        // Validate content
+        validatePostContent(post.getContent());
+        return channelService.findOneByCurrentUser()
+                .map(channel -> postRepository.findById(post.getId())
+                        .map(existingPost -> {
+                            // Ownership check
+                            if (!channel.getId().equals(existingPost.getChannel().getId())) {
+                                throw new UnauthorizedResourceAccessException(
+                                        channel.getUser(), existingPost.getId(), ENTITY_NAME);
+                            }
+                            // Save new files
+                            List<File> newFiles = fileService.save(medias, covers);
+                            existingPost.getFiles().addAll(newFiles);
+                            // Apply updates
+                            if (post.getKeywords() != null)
+                                existingPost.setKeywords(post.getKeywords());
+                            if (post.getAt() != null)
+                                existingPost.setAt(post.getAt());
+                            if (post.getLastUpdate() != null)
+                                existingPost.setLastUpdate(post.getLastUpdate());
+                            if (post.getVisibility() != null)
+                                existingPost.setVisibility(post.getVisibility());
+                            if (post.getContent() != null)
+                                existingPost.setContent(post.getContent());
+                            if (post.getStatus() != null)
+                                existingPost.setStatus(post.getStatus());
+                            // Persist before deleting files
+                            postRepository.save(existingPost);
+                            // Delete removed files (irreversible)
+                            fileService.delete(deletedMedias);
+                            return existingPost;
+                        })
+                        .orElseThrow(
+                                () -> new ResourceNotFoundException("Entity not found", ENTITY_NAME, "idnotfound")))
+                .orElseThrow(ChannelNotFoundException::new);
     }
 
     /**
-     * Get all the posts.
-     *
-     * @param pageable the pagination information.
-     * @return the list of entities.
+     * Validate post content for creation or update.
+     * 
+     * @param content the content to validate
+     * @throws BadRequestAlertException if the content is null, blank, or exceeds
+     *                                  the maximum allowed length.
      */
-    @Transactional(readOnly = true)
-    public PageDTO<Post> findAll(String query, Pageable pageable) {
-        log.debug("Request to get all Posts");
-        if (query.length() > 5) {
-            return fullTextSearch(query, pageable);
+    private void validatePostContent(String content) {
+        if (content == null || content.isBlank()) {
+            throw new BadRequestAlertException(
+                    "Content cannot be empty.",
+                    ENTITY_NAME,
+                    "contentEmpty");
         }
-        Slice<Post> page = postRepository.findByStatusOrderByAtDesc(Status.VALIDATED, pageable);
-        return PageDTO.from(page);
+        if (content.length() > Constants.MAX_POST_LENGTH) {
+            throw new BadRequestAlertException(
+                    "Content too long (> " + Constants.MAX_POST_LENGTH + " characters).",
+                    ENTITY_NAME,
+                    "contentTooLong");
+        }
     }
 
     /**
@@ -217,61 +216,6 @@ public class PostService {
     public Slice<Post> getRecommendedPosts(Pageable pageable) {
         log.debug("Post to get recommended Post");
         return postRepository.findByStatusOrderByAtDesc(Status.VALIDATED, pageable);
-    }
-
-    @Transactional(readOnly = true)
-    public PageDTO<Post> fullTextSearch(String fullText, Pageable pageable) {
-        String sqlQuery = "SELECT " +
-                "  full_search.*, " +
-                "  p.id AS post_reference_id, " +
-                "  p.title AS post_reference_title, " +
-                "  p.content AS post_reference_content, " +
-                "  a.name AS channel_name " +
-                "FROM ( " +
-                "  SELECT p.* FROM ( " +
-                "    SELECT *, ts_rank_cd(textsearchable_index_col, query) AS rank " +
-                "    FROM nk_post, websearch_to_tsquery('french', :fullText) query " +
-                "    WHERE status = 'VALIDATED' AND textsearchable_index_col @@ query " +
-                "    ) AS p " +
-                "  LEFT JOIN (SELECT id, ts_rank_cd(textsearchable_index_col, query) AS rank " +
-                "  FROM nk_post, websearch_to_tsquery('french', :fullText) query " +
-                "  WHERE textsearchable_index_col @@ query) AS a " +
-                "  ON p.channel_id = a.id " +
-                "  ORDER BY a.rank,p.rank DESC " +
-                "  LIMIT :limit " +
-                "  OFFSET :offset " +
-                ") AS full_search " +
-                "LEFT JOIN nk_post AS p ON full_search.post_reference_id = p.id " +
-                "LEFT JOIN nk_channel AS a ON a.id = p.channel_id";
-        Query query = entityManager.createNativeQuery(sqlQuery, Tuple.class);
-        query.setParameter("fullText", fullText);
-        query.setParameter("limit", pageable.getPageSize());
-        query.setParameter("offset", pageable.getOffset());
-        List<Tuple> result = query.getResultList();
-        List<Post> posts = result.stream()
-                .map(t -> {
-                    Post post = new Post();
-                    var channel = new Channel();
-                    channel.setId(t.get("channel_id", Long.class));
-                    channel.setName(t.get("channel_name", String.class));
-                    // java.time.Instant
-                    post.id(t.get("id", Long.class))
-                            .keywords(t.get("keywords", String.class))
-                            .at(t.get("at", Instant.class))
-                            .lastUpdate(t.get("last_update", Instant.class))
-                            .visibility(Visibility.valueOf(t.get("visibility", String.class)))
-                            .content(t.get("content", String.class))
-                            .status(Status.valueOf(t.get("status", String.class)))
-                            .channel(channel)
-                            .postReply(
-                                    new Post()
-                                            .id(t.get("post_reference_id", Long.class))
-                                            .content(t.get("post_reference_content", String.class)));
-                    return post;
-                })
-                .collect(Collectors.toList());
-        Page<Post> page = new PageImpl<>(posts, pageable, posts.size());
-        return PageDTO.from(page);
     }
 
     public List<PostDTO> getRecommendedPost() {

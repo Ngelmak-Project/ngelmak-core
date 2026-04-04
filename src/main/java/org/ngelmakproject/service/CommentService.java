@@ -2,17 +2,17 @@ package org.ngelmakproject.service;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import org.ngelmakproject.config.Constants;
 import org.ngelmakproject.domain.Comment;
 import org.ngelmakproject.domain.File;
 import org.ngelmakproject.repository.CommentRepository;
 import org.ngelmakproject.repository.projection.CommentProjection;
-import org.ngelmakproject.web.rest.errors.ChannelNotFoundException;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
+import org.ngelmakproject.web.rest.errors.ChannelNotFoundException;
 import org.ngelmakproject.web.rest.errors.ResourceNotFoundException;
 import org.ngelmakproject.web.rest.errors.UnauthorizedResourceAccessException;
 import org.slf4j.Logger;
@@ -47,78 +47,136 @@ public class CommentService {
     }
 
     /**
-     * Save a comment.
+     * Creates and persists a new Comment.
      *
-     * @param comment the entity to save.
-     * @return the persisted entity.
+     * <p>
+     * This method performs the following steps:
+     * </p>
+     * <ol>
+     * <li>Validates the comment content (non-empty, within allowed length).</li>
+     * <li>Retrieves the current user's channel.</li>
+     * <li>Saves the optional media file, if provided.</li>
+     * <li>Populates metadata on the Comment (timestamp, file, channel).</li>
+     * <li>Updates the parent Post or Comment counters.</li>
+     * <li>Persists the Comment entity.</li>
+     * </ol>
+     *
+     * @param comment the Comment entity to create
+     * @param media   an optional media file attached to the comment
+     * @return the persisted Comment entity
+     * @throws BadRequestAlertException if content is invalid or no parent is
+     *                                  provided
+     * @throws ChannelNotFoundException if the current user has no associated
+     *                                  channel
      */
     public Comment save(Comment comment, Optional<MultipartFile> media) {
-        log.debug("Request to save Comment : {} | {}x file", comment, media.map(e -> 1).orElse(0));
-        if (comment.getContent().length() > 1000) {
-            throw new BadRequestAlertException("Contenu trop long > 1000 caractères.", ENTITY_NAME, "contentTooLong");
-        }
-        // [TODO] This action should be done asynchronously with redis database
-        return channelService.findOneByCurrentUser().map(channel -> {
-            /* 1. we start by saving the files if exists */
-            List<MultipartFile> medias = media.map(m -> Arrays.asList(m)).orElse(List.of());
-            List<File> files = fileService.save(medias);
-            /* 2. then save the Comment with the attachment */
-            comment
-                    .at(Instant.now()) // set the current time
-                    .file(files.stream().findFirst().orElse(null)) // attach the file is exists.
-                    .channel(channel); // set the current connected user as owner of the comment.
-            // [TODO] Use Redis to record the changes.
-            if (comment.getPost() != null) {
-                this.postService.updateCommmentCount(comment.getPost().getId(), 1);
-            } else if (comment.getReplyTo() != null) {
-                this.updateReplyCount(comment.getReplyTo().getId(), 1);
-            } else {
-                throw new BadRequestAlertException(
-                        "A comment must always refer to at least one Post or Comment, but none have been provided.",
-                        ENTITY_NAME, "missingPostOrComment");
-            }
-
-            return commentRepository.save(comment);
-        }).orElseThrow(ChannelNotFoundException::new);
+        log.debug("Request to save Comment : {} | {} file(s)",
+                comment, media.isPresent() ? 1 : 0);
+        // 1. Validate content
+        validateCommentContent(comment.getContent());
+        return channelService.findOneByCurrentUser()
+                .map(channel -> {
+                    // 2. Save media (if provided)
+                    List<MultipartFile> mediaList = media
+                            .map(List::of)
+                            .orElse(List.of());
+                    List<File> savedFiles = fileService.save(mediaList);
+                    // 3. Prepare the comment entity
+                    comment.at(Instant.now())
+                            .file(savedFiles.stream().findFirst().orElse(null))
+                            .channel(channel);
+                    // 4. Update counters (post or parent comment)
+                    if (comment.getPost() != null) {
+                        postService.updateCommmentCount(comment.getPost().getId(), 1);
+                    } else if (comment.getReplyTo() != null) {
+                        updateReplyCount(comment.getReplyTo().getId(), 1);
+                    } else {
+                        throw new BadRequestAlertException(
+                                "A comment must refer to either a Post or another Comment.",
+                                ENTITY_NAME,
+                                "missingPostOrComment");
+                    }
+                    // 5. Persist
+                    return commentRepository.save(comment);
+                })
+                .orElseThrow(ChannelNotFoundException::new);
     }
 
     /**
-     * Update a comment.
+     * Updates an existing Comment.
      *
-     * @param comment the entity to update partially.
-     * @return the persisted entity.
+     * <p>
+     * This method performs the following steps:
+     * </p>
+     * <ol>
+     * <li>Validates the updated content.</li>
+     * <li>Retrieves the current user's channel.</li>
+     * <li>Loads the existing Comment and checks ownership.</li>
+     * <li>Updates content and timestamp.</li>
+     * <li>Handles media replacement (save new file, delete old one).</li>
+     * <li>Persists the updated Comment.</li>
+     * </ol>
+     *
+     * @param comment     the Comment entity containing updated fields
+     * @param media       an optional new media file to attach
+     * @param deletedFile an optional file to delete if replaced
+     * @return the updated Comment entity
+     * @throws UnauthorizedResourceAccessException if the user does not own the
+     *                                             comment
+     * @throws ResourceNotFoundException           if the comment does not exist
+     * @throws ChannelNotFoundException            if the current user has no
+     *                                             associated channel
      */
     public Comment update(Comment comment, Optional<MultipartFile> media, Optional<File> deletedFile) {
-        log.debug("Request to save Comment : {} | {}x file", comment, media.map(e -> 1).orElse(0));
-        if (comment.getContent().length() > 1000) {
-            throw new BadRequestAlertException("Contenu trop long > 1000 caractères.", ENTITY_NAME, "contentTooLong");
-        }
-        return channelService.findOneByCurrentUser().map(channel -> {
-            return commentRepository
-                    .findById(comment.getId())
-                    .map(existingComment -> {
-                        if (channel.getId() != existingComment.getChannel().getId()) {
-                            throw new UnauthorizedResourceAccessException(channel.getUser(), existingComment.getId(),
-                                    ENTITY_NAME);
-                        }
-                        existingComment.setLastUpdate(Instant.now());
-                        if (comment.getContent() != null) {
-                            existingComment.setContent(comment.getContent());
-                        }
-                        if (media.isPresent()) {
-                            /* 1. we start by saving the files if exists */
-                            List<MultipartFile> medias = media.map(m -> Arrays.asList(m)).orElse(List.of());
-                            List<File> files = fileService.save(medias);
-                            // 2. attach the file is exists.
-                            if (deletedFile.isPresent()) {
-                                this.fileService.delete(Arrays.asList(deletedFile.get()));
+        log.debug("Request to update Comment : {} | {} file(s)",
+                comment, media.isPresent() ? 1 : 0);
+        // 1. Validate content
+        validateCommentContent(comment.getContent());
+        return channelService.findOneByCurrentUser()
+                .map(channel -> commentRepository.findById(comment.getId())
+                        .map(existingComment -> {
+                            // 2. Ownership check
+                            if (!channel.getId().equals(existingComment.getChannel().getId())) {
+                                throw new UnauthorizedResourceAccessException(
+                                        channel.getUser(), existingComment.getId(), ENTITY_NAME);
                             }
-                            existingComment.setFile(files.stream().findFirst().orElse(null));
-                        }
-                        return this.commentRepository.save(existingComment);
-                    })
-                    .orElseThrow(() -> new ResourceNotFoundException("Entity not found", ENTITY_NAME, "idnotfound"));
-        }).orElseThrow(ChannelNotFoundException::new);
+                            // 3. Update fields
+                            existingComment.setLastUpdate(Instant.now());
+                            existingComment.setContent(comment.getContent());
+                            // 4. Handle media update
+                            if (media.isPresent()) {
+                                List<File> newFiles = fileService.save(List.of(media.get()));
+                                deletedFile.ifPresent(file -> fileService.delete(List.of(file)));
+                                existingComment.setFile(newFiles.stream().findFirst().orElse(null));
+                            }
+                            // 5. Persist
+                            return commentRepository.save(existingComment);
+                        })
+                        .orElseThrow(
+                                () -> new ResourceNotFoundException("Entity not found", ENTITY_NAME, "idnotfound")))
+                .orElseThrow(ChannelNotFoundException::new);
+    }
+
+    /**
+     * Validate comment content for creation or update.
+     * 
+     * @param content the content to validate
+     * @throws BadRequestAlertException if the content is null, blank, or exceeds
+     *                                  the maximum allowed length.
+     */
+    private void validateCommentContent(String content) {
+        if (content == null || content.isBlank()) {
+            throw new BadRequestAlertException(
+                    "Content cannot be empty.",
+                    ENTITY_NAME,
+                    "contentEmpty");
+        }
+        if (content.length() > Constants.MAX_COMMENT_LENGTH) {
+            throw new BadRequestAlertException(
+                    "Content too long (> " + Constants.MAX_COMMENT_LENGTH + " characters).",
+                    ENTITY_NAME,
+                    "contentTooLong");
+        }
     }
 
     /**

@@ -17,6 +17,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 /**
  * A Comment.
@@ -44,7 +45,8 @@ public class Comment implements Serializable {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
-    @Column(name = "content", length = 1000, nullable = false)
+    @Column(name = "content", length = 2000, nullable = false)
+    @Size(max = 2000)
     private String content;
 
     @ManyToOne(fetch = FetchType.LAZY, cascade = CascadeType.REMOVE)

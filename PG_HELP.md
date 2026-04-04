@@ -4,41 +4,6 @@ This document consolidates PostgreSQL installation notes, indexing strategy, fee
 
 ---
 
-## 1. Installation and Configuration
-
-### 1.1 PostgreSQL Installation (Ubuntu)
-
-```bash
-sudo apt -y install postgresql-14
-sudo systemctl restart postgresql
-```
-
-### 1.2 Remote Access Configuration
-
-`postgresql.conf`:
-
-```
-listen_addresses = '*'
-```
-
-`pg_hba.conf`:
-
-```bash
-sudo sed -i '/^host/s/ident/md5/' /etc/postgresql/14/main/pg_hba.conf
-sudo sed -i '/^local/s/peer/trust/' /etc/postgresql/14/main/pg_hba.conf
-echo "host all all 0.0.0.0/0 md5" | sudo tee -a /etc/postgresql/14/main/pg_hba.conf
-sudo systemctl restart postgresql
-```
-
-### 1.3 Basic Administration
-
-```bash
-ALTER USER postgres PASSWORD '<password>';
-CREATE USER <username> WITH PASSWORD '<password>';
-CREATE DATABASE <database_name> OWNER <username>;
-```
-
----
 
 ## 2. Feed Query Optimization
 
