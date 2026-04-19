@@ -121,9 +121,9 @@ public class PostResource {
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and the list
      *         of posts in body.
      */
-    @GetMapping("/channel/{id}")
+    @GetMapping("/channel/{channelId}")
     public ResponseEntity<PageDTO<PostDTO>> getPostByChannel(@PathVariable Long channelId, Pageable pageable) {
-        log.debug("REST request to get a page of Posts by Channel : {}", channelId);
+        log.info("REST request to get a page of Posts by Channel : {}", channelId);
         PageDTO<PostDTO> page = postService.getPostByChannel(channelId, pageable);
         return ResponseEntity.ok().cacheControl(CacheControl.maxAge(60, TimeUnit.SECONDS))
                 .body(page);

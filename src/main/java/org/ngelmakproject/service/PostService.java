@@ -363,11 +363,6 @@ public class PostService {
                 windowStart,
                 pageable.getPageSize(),
                 (int) pageable.getOffset()));
-        //
-        posts.sort((a, b) -> {
-            return -1 * a.getAt().compareTo(b.getAt());
-        });
-
         // Extract post IDs
         List<Long> postIds = posts.stream().map(Post::getId).toList();
         // 2. Bulk fetch reactions for all posts in the feed
