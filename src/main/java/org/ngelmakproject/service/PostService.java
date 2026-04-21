@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.ngelmakproject.config.Constants;
 import org.ngelmakproject.domain.Channel;
@@ -20,12 +21,14 @@ import org.ngelmakproject.repository.FeedRepository;
 import org.ngelmakproject.repository.PostRepository;
 import org.ngelmakproject.repository.ReactionRepository;
 import org.ngelmakproject.repository.SubscriptionRepository;
+import org.ngelmakproject.web.rest.dto.ActiveChannel;
 import org.ngelmakproject.web.rest.dto.FeedDTO;
 import org.ngelmakproject.web.rest.dto.FeedPageDTO;
 import org.ngelmakproject.web.rest.dto.PageDTO;
 import org.ngelmakproject.web.rest.dto.PostDTO;
 import org.ngelmakproject.web.rest.dto.ReactionSummaryDTO;
 import org.ngelmakproject.web.rest.dto.SortDTO;
+import org.ngelmakproject.web.rest.dto.Trending;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
 import org.ngelmakproject.web.rest.errors.ChannelNotFoundException;
 import org.ngelmakproject.web.rest.errors.ResourceNotFoundException;
@@ -588,4 +591,49 @@ public class PostService {
         return PageDTO.from(page);
     }
 
+    /**
+     * Fetches trending data including most active channels and most
+     * commented/trending posts.
+     * 
+     * Performs a single bulk fetch of reactions for all posts to avoid N+1 queries.
+     * 
+     * @return Trending object containing top channels and post lists with reaction
+     *         summaries.
+     */
+    public Trending getTrending() {
+        log.debug("Trending...");
+        List<Post> mostCommentedPosts = postRepository.mostCommentedPosts();
+        List<Post> trendingPosts = postRepository.trendingPosts();
+
+        // Extract post IDs from both lists
+        List<Long> postIds = Stream.concat(
+                mostCommentedPosts.stream().map(Post::getId),
+                trendingPosts.stream().map(Post::getId)).toList();
+
+        // Single bulk fetch for all reactions
+        List<Reaction> reactions = reactionRepository.findByPostIds(postIds);
+        Map<Long, List<Reaction>> reactionsByPost = ReactionService.groupReactionsByPost(reactions);
+
+        // Map both lists to DTOs
+        List<PostDTO> mostCommentedPostDTOs = mostCommentedPosts.stream()
+                .map(post -> {
+                    List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
+                    ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions, null);
+                    return PostDTO.from(post, summary);
+                })
+                .toList();
+
+        List<PostDTO> trendingPostDTOs = trendingPosts.stream()
+                .map(post -> {
+                    List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
+                    ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions, null);
+                    return PostDTO.from(post, summary);
+                })
+                .toList();
+
+        List<ActiveChannel> topActiveChannels = channelService.getActiveChannels();
+
+        return new Trending(topActiveChannels, trendingPostDTOs, mostCommentedPostDTOs);
+
+    }
 }

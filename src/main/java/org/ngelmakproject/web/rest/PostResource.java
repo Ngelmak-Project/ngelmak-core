@@ -13,6 +13,7 @@ import org.ngelmakproject.service.PostService;
 import org.ngelmakproject.web.rest.dto.FeedPageDTO;
 import org.ngelmakproject.web.rest.dto.PageDTO;
 import org.ngelmakproject.web.rest.dto.PostDTO;
+import org.ngelmakproject.web.rest.dto.Trending;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
 import org.ngelmakproject.web.rest.util.HeaderUtil;
 import org.ngelmakproject.web.rest.util.ResponseUtil;
@@ -194,6 +195,18 @@ public class PostResource {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.maxAge(60, TimeUnit.SECONDS))
                 .body(pageDTO);
+    }
+
+    /**
+     * Retrieves trending data including top active channels and trending posts.
+     *
+     * @return the {@link ResponseEntity} with status {@code 200 (OK)} with Trending
+     *         object containing channels and posts ranked by engagement.
+     */
+    @GetMapping("/trending")
+    public ResponseEntity<Trending> getTrending() {
+        log.debug("REST request fetching trending");
+        return ResponseEntity.ok(postService.getTrending());
     }
 
     /**

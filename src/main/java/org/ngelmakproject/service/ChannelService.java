@@ -9,8 +9,10 @@ import org.ngelmakproject.domain.Channel;
 import org.ngelmakproject.domain.Subscription;
 import org.ngelmakproject.repository.ChannelRepository;
 import org.ngelmakproject.repository.SubscriptionRepository;
+import org.ngelmakproject.repository.projection.ActiveChannelProjection;
 import org.ngelmakproject.security.UserService;
 import org.ngelmakproject.security.UserService.UserPrincipal;
+import org.ngelmakproject.web.rest.dto.ActiveChannel;
 import org.ngelmakproject.web.rest.dto.ChannelDTO;
 import org.ngelmakproject.web.rest.dto.SubscriptionDTO;
 import org.ngelmakproject.web.rest.dto.SubscriptionStatsDTO;
@@ -371,6 +373,37 @@ public class ChannelService {
         subscriptionRepository
                 .findById(id).filter(s -> s.getSubscriber().getId().equals(currentChannel.getId()))
                 .ifPresent(subscriptionRepository::delete);
+    }
+
+    /**
+     * Retrieves the top 10 most active channels based on post activity in the last
+     * 7 days.
+     * 
+     * Fetches channel data from the repository and maps projections to
+     * ActiveChannel DTOs
+     * for API response serialization.
+     * 
+     * Channels are ranked by:
+     * 1. Post count in the last 7 days (descending)
+     * 2. Channel creation date (ascending, as tiebreaker)
+     * 
+     * @return List of ActiveChannel DTOs containing channel metadata and post
+     *         count.
+     *         Returns an empty list if no channels exist.
+     */
+    public List<ActiveChannel> getActiveChannels() {
+        log.debug("Fetching most active channels (7-day window)");
+        return this.channelRepository.topActiveChannels()
+                .stream()
+                .map(e -> new ActiveChannel(
+                        e.getId(),
+                        e.getName(),
+                        e.getIdentifier(),
+                        e.getAvatar(),
+                        e.getBanner(),
+                        e.getDescription(),
+                        e.getPostCount()))
+                .toList();
     }
 
     /**

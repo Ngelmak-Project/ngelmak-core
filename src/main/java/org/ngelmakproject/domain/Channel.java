@@ -148,5 +148,4 @@ public class Channel implements Serializable {
                 + ", description=" + description + ", avatar=" + avatar + ", banner=" + banner + ", createdAt="
                 + createdAt + ", deletedAt=" + deletedAt + "]";
     }
-
 }
