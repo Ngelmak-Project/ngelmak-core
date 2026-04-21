@@ -38,7 +38,7 @@ public interface ChannelRepository extends JpaRepository<Channel, Long> {
     @Query("""
             SELECT c.id, c.name, c.identifier, c.avatar, c.banner, c.description, COUNT(p.id) as post_count
             FROM Channel c
-            LEFT JOIN Post p ON p.channel.id = c.id AND p.at >= NOW() - INTERVAL '7 days'
+            LEFT JOIN Post p ON p.channel.id = c.id AND p.at >= CURRENT_TIMESTAMP - 7
             GROUP BY c.id
             ORDER BY post_count DESC, c.createdAt ASC
             LIMIT 10
