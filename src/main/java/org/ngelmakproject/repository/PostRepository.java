@@ -265,10 +265,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			LEFT JOIN FETCH p.channel
 			LEFT JOIN FETCH p.files
 			WHERE p.at >= CURRENT_TIMESTAMP - 7
-			ORDER BY (
-			    p.commentCount * 2.0
-			    + (FUNCTION('EXTRACT', EPOCH, p.at) - FUNCTION('EXTRACT', EPOCH, CURRENT_TIMESTAMP - 7)) / 3600.0 * 0.5
-			) DESC
+			ORDER BY (p.commentCount * 2.0 + EXTRACT(EPOCH FROM p.at) * 0.5) DESC
 			LIMIT 5
 			""")
 	List<Post> trendingPosts();
