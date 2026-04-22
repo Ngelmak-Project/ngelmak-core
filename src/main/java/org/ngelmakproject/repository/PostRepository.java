@@ -268,7 +268,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			WHERE p.at >= :since
 			ORDER BY p.commentCount DESC
 			""")
-	List<Post> trendingPosts(@Param("since") LocalDateTime since, Pageable pageable);
+	List<Post> trendingPosts(@Param("since") Instant since, Pageable pageable);
 
 	/**
 	 * Fetches the top 5 most commented posts from the last 7 days, ranked by
@@ -287,7 +287,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			WHERE p.at >= :since
 			ORDER BY p.commentCount DESC
 			""")
-	List<Post> mostCommentedPosts(@Param("since") LocalDateTime since, Pageable pageable);
+	List<Post> mostCommentedPosts(@Param("since") Instant since, Pageable pageable);
 
 	/**
 	 * Use an @EntityGraph to fetch channel + files in one go:
