@@ -604,10 +604,10 @@ public class PostService {
      */
     public Trending getTrending() {
         log.debug("Trending...");
-        List<Post> mostCommentedPosts = postRepository.mostCommentedPosts(Instant.now().minus(7, ChronoUnit.DAYS),
+        List<Post> mostCommentedPosts = postRepository.mostCommentedPosts(Instant.now().minus(30, ChronoUnit.DAYS),
                 PageRequest.of(0, 5));
         List<Post> trendingPosts = postRepository.trendingPosts(
-                Instant.now().minus(7, ChronoUnit.DAYS),
+                Instant.now().minus(30, ChronoUnit.DAYS),
                 PageRequest.of(0, 5));
 
         // Extract post IDs from both lists

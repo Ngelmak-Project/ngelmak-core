@@ -379,14 +379,14 @@ public class ChannelService {
 
     /**
      * Retrieves the top 10 most active channels based on post activity in the last
-     * 7 days.
+     * 30 days.
      * 
      * Fetches channel data from the repository and maps projections to
      * ActiveChannel DTOs
      * for API response serialization.
      * 
      * Channels are ranked by:
-     * 1. Post count in the last 7 days (descending)
+     * 1. Post count in the last 30 days (descending)
      * 2. Channel creation date (ascending, as tiebreaker)
      * 
      * @return List of ActiveChannel DTOs containing channel metadata and post
@@ -394,8 +394,8 @@ public class ChannelService {
      *         Returns an empty list if no channels exist.
      */
     public List<ActiveChannel> getActiveChannels() {
-        log.debug("Fetching most active channels (7-day window)");
-        return this.channelRepository.topActiveChannels(Instant.now().minus(7, ChronoUnit.DAYS), PageRequest.of(0, 10))
+        log.debug("Fetching most active channels (30-day window)");
+        return this.channelRepository.topActiveChannels(Instant.now().minus(30, ChronoUnit.DAYS), PageRequest.of(0, 10))
                 .stream()
                 .map(e -> new ActiveChannel(
                         e.getId(),
