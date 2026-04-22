@@ -1,6 +1,7 @@
 package org.ngelmakproject.service;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -37,6 +38,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
@@ -602,8 +604,11 @@ public class PostService {
      */
     public Trending getTrending() {
         log.debug("Trending...");
-        List<Post> mostCommentedPosts = postRepository.mostCommentedPosts();
-        List<Post> trendingPosts = postRepository.trendingPosts();
+        List<Post> mostCommentedPosts = postRepository.mostCommentedPosts(LocalDateTime.now().minusDays(7),
+                PageRequest.of(0, 5));
+        List<Post> trendingPosts = postRepository.trendingPosts(
+                LocalDateTime.now().minusDays(7),
+                PageRequest.of(0, 5));
 
         // Extract post IDs from both lists
         List<Long> postIds = Stream.concat(

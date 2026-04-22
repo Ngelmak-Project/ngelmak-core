@@ -1,6 +1,7 @@
 package org.ngelmakproject.repository;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -259,16 +260,15 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	 * @see #trendingPosts() for native query alternative with better performance.
 	 */
 	@Query("""
-			SELECT p
+			SELECT DISTINCT p
 			FROM Post p
 			LEFT JOIN FETCH p.postReply
 			LEFT JOIN FETCH p.channel
 			LEFT JOIN FETCH p.files
-			WHERE p.at >= CURRENT_TIMESTAMP - 7
-			ORDER BY (p.commentCount * 2.0 + EXTRACT(EPOCH FROM p.at) * 0.5) DESC
-			LIMIT 5
+			WHERE p.at >= :since
+			ORDER BY p.commentCount DESC
 			""")
-	List<Post> trendingPosts();
+	List<Post> trendingPosts(@Param("since") LocalDateTime since, Pageable pageable);
 
 	/**
 	 * Fetches the top 5 most commented posts from the last 7 days, ranked by
@@ -284,11 +284,10 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			LEFT JOIN FETCH p.postReply
 			LEFT JOIN FETCH p.channel
 			LEFT JOIN FETCH p.files
-			WHERE p.at >= CURRENT_TIMESTAMP - 7
+			WHERE p.at >= :since
 			ORDER BY p.commentCount DESC
-			LIMIT 5
 			""")
-	List<Post> mostCommentedPosts();
+	List<Post> mostCommentedPosts(@Param("since") LocalDateTime since, Pageable pageable);
 
 	/**
 	 * Use an @EntityGraph to fetch channel + files in one go:
