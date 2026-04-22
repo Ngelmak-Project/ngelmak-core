@@ -2,6 +2,7 @@ package org.ngelmakproject.service;
 
 import java.text.Normalizer;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,6 +22,7 @@ import org.ngelmakproject.web.rest.errors.UnauthorizedResourceAccessException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -393,7 +395,7 @@ public class ChannelService {
      */
     public List<ActiveChannel> getActiveChannels() {
         log.debug("Fetching most active channels (7-day window)");
-        return this.channelRepository.topActiveChannels()
+        return this.channelRepository.topActiveChannels(Instant.now().minus(7, ChronoUnit.DAYS), PageRequest.of(0, 10))
                 .stream()
                 .map(e -> new ActiveChannel(
                         e.getId(),

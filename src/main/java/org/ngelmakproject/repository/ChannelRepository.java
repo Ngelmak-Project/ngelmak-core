@@ -1,13 +1,16 @@
 package org.ngelmakproject.repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Queue;
 
 import org.ngelmakproject.domain.Channel;
 import org.ngelmakproject.repository.projection.ActiveChannelProjection;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -32,17 +35,23 @@ public interface ChannelRepository extends JpaRepository<Channel, Long> {
      * tiebreaker)
      * 
      * @return List of active channel projections containing channel ID and post
-     *         count.
-     *         Returns an empty list if no channels exist.
+     *         count. Returns an empty list if no channels exist.
      */
     @Query("""
-            SELECT c.id, c.name, c.identifier, c.avatar, c.banner, c.description, COUNT(p.id) as post_count
+            SELECT c.id AS id,
+                    c.name AS name,
+                    c.identifier AS identifier,
+                    c.avatar AS avatar,
+                    c.banner AS banner,
+                    c.description AS description,
+                    COUNT(p.id) AS postCount
             FROM Channel c
-            LEFT JOIN Post p ON p.channel.id = c.id AND p.at >= CURRENT_TIMESTAMP - 7
+            LEFT JOIN c.posts p
+                ON p.at >= :since
             GROUP BY c.id
-            ORDER BY post_count DESC, c.createdAt ASC
-            LIMIT 10
+            ORDER BY COUNT(p.id)
+            DESC, c.createdAt ASC
             """)
-    List<ActiveChannelProjection> topActiveChannels();
+    List<ActiveChannelProjection> topActiveChannels(@Param("since") Instant since, Pageable pageable);
 
 }
