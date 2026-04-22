@@ -46,8 +46,8 @@ public interface ChannelRepository extends JpaRepository<Channel, Long> {
                     c.description AS description,
                     COUNT(p.id) AS postCount
             FROM Channel c
-            LEFT JOIN c.posts p
-                ON p.at >= :since
+            LEFT JOIN Post p
+            ON p.channel.id = c.id AND p.at >= :since
             GROUP BY c.id
             ORDER BY COUNT(p.id)
             DESC, c.createdAt ASC
