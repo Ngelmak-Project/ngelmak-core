@@ -15,7 +15,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
-import jakarta.validation.constraints.NotNull;
 
 /**
  * A File.
@@ -48,8 +47,7 @@ public class File implements Serializable {
     @Column(name = "url")
     private String url;
 
-    @NotNull
-    @Column(name = "type", nullable = false)
+    @Column(name = "type")
     private String type;
 
     @JsonIgnore
@@ -147,21 +145,4 @@ public class File implements Serializable {
     public void setCover(File cover) {
         this.cover = cover;
     }
-
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("File{");
-        sb.append("id=").append(id);
-        sb.append(", filename=").append(filename);
-        sb.append(", size=").append(size);
-        sb.append(", duration=").append(duration);
-        sb.append(", url=").append(url);
-        sb.append(", type=").append(type);
-        sb.append(", createdAt=").append(createdAt);
-        sb.append(", cover=").append(cover);
-        sb.append('}');
-        return sb.toString();
-    }
-
 }

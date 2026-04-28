@@ -1,13 +1,13 @@
 package org.ngelmakproject.service;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -82,27 +82,44 @@ public class PostService {
     /**
      * Saves a new Post.
      *
-     * @param post   the Post to create
-     * @param medias media files attached to the post
-     * @param covers cover images attached to the post
+     * @param post      the Post to create
+     * @param medias    media files attached to the post via multipart upload
+     * @param mediaUrls external media URLs to attach to the post
+     * @param covers    cover images attached to the post via multipart upload
+     * @param coverUrls external cover image URLs to attach to the post
      * @return the persisted Post
      */
     @Transactional
-    public Post save(Post post, List<MultipartFile> medias, List<MultipartFile> covers) {
-        log.debug("Request to save Post : {} | {}x file(s) and {}x cover(s)",
-                post, medias.size(), covers.size());
+    public Post save(Post post,
+            List<MultipartFile> medias,
+            List<String> mediaUrls,
+            List<MultipartFile> covers,
+            List<String> coverUrls) {
+        log.debug("Request to save Post : {} | {}x media file(s), {}x media URL(s), "
+                + "{}x cover file(s), {}x cover URL(s)",
+                post, medias.size(), mediaUrls.size(), covers.size(), coverUrls.size());
 
-        // Validate content
         validatePostContent(post.getContent());
+
         return channelService.findOneByCurrentUser()
                 .map(channel -> {
-                    // Save media files
-                    List<File> files = fileService.save(medias, covers);
+                    // Save uploaded files
+                    List<File> uploadedFiles = fileService.save(medias, covers);
+
+                    // Process and save URL resources
+                    List<File> urlFiles = fileService.saveFromUrls(mediaUrls, coverUrls);
+
+                    // Combine all files
+                    Set<File> allFiles = new HashSet<>();
+                    allFiles.addAll(uploadedFiles);
+                    allFiles.addAll(urlFiles);
+
                     // Prepare entity
                     post.status(Status.VALIDATED)
                             .at(Instant.now())
-                            .files(new HashSet<>(files))
+                            .files(allFiles)
                             .channel(channel);
+
                     // Persist
                     return postRepository.save(post);
                 })
@@ -111,22 +128,31 @@ public class PostService {
 
     /**
      * Updates an existing Post.
-     * May also delete files listed in deletedMedias.
+     * May also delete files/resources listed in deletedFileUrls.
      *
-     * @param post          the Post containing updated fields
-     * @param deletedMedias files to remove
-     * @param medias        new media files to add
-     * @param covers        new cover files to add
+     * @param post            the Post containing updated fields
+     * @param deletedFileUrls file or resource IDs to remove
+     * @param medias          new media files to add via multipart upload
+     * @param mediaUrls       new external media URLs to add
+     * @param covers          new cover files to add via multipart upload
+     * @param coverUrls       new external cover image URLs to add
      * @return the updated Post
      */
-    public Post update(Post post, List<File> deletedMedias,
-            List<MultipartFile> medias, List<MultipartFile> covers) {
+    @Transactional
+    public Post update(Post post,
+            List<String> deletedFileUrls,
+            List<MultipartFile> medias,
+            List<String> mediaUrls,
+            List<MultipartFile> covers,
+            List<String> coverUrls) {
 
-        log.debug("Request to update Post : {} | {}x file(s), {}x cover(s), {}x to delete",
-                post, medias.size(), covers.size(), deletedMedias.size());
+        log.debug("Request to update Post : {} | {}x media file(s), {}x media URL(s), "
+                + "{}x cover file(s), {}x cover URL(s), {}x to delete",
+                post, medias.size(), mediaUrls.size(), covers.size(), coverUrls.size(),
+                deletedFileUrls.size());
 
-        // Validate content
         validatePostContent(post.getContent());
+
         return channelService.findOneByCurrentUser()
                 .map(channel -> postRepository.findById(post.getId())
                         .map(existingPost -> {
@@ -135,32 +161,146 @@ public class PostService {
                                 throw new UnauthorizedResourceAccessException(
                                         channel.getUser(), existingPost.getId(), ENTITY_NAME);
                             }
-                            // Save new files
-                            List<File> newFiles = fileService.save(medias, covers);
-                            existingPost.getFiles().addAll(newFiles);
-                            // Apply updates
-                            if (post.getKeywords() != null)
-                                existingPost.setKeywords(post.getKeywords());
-                            if (post.getAt() != null)
-                                existingPost.setAt(post.getAt());
-                            if (post.getLastUpdate() != null)
-                                existingPost.setLastUpdate(post.getLastUpdate());
-                            if (post.getVisibility() != null)
-                                existingPost.setVisibility(post.getVisibility());
-                            if (post.getContent() != null)
-                                existingPost.setContent(post.getContent());
-                            if (post.getStatus() != null)
-                                existingPost.setStatus(post.getStatus());
+
+                            // Save new uploaded files
+                            List<File> newUploadedFiles = fileService.save(medias, covers);
+                            existingPost.getFiles().addAll(newUploadedFiles);
+
+                            // Process and save new URL resources
+                            List<File> newUrlFiles = fileService.saveFromUrls(mediaUrls, coverUrls);
+                            existingPost.getFiles().addAll(newUrlFiles);
+
+                            // Apply field updates
+                            applyPostUpdates(existingPost, post);
+
                             // Persist before deleting files
                             postRepository.save(existingPost);
+
                             // Delete removed files (irreversible)
-                            fileService.delete(deletedMedias);
+                            if (!deletedFileUrls.isEmpty()) {
+                                fileService.deleteByUrls(deletedFileUrls);
+                            }
+
                             return existingPost;
                         })
-                        .orElseThrow(
-                                () -> new ResourceNotFoundException("Entity not found", ENTITY_NAME, "idnotfound")))
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Entity not found", ENTITY_NAME, "idnotfound")))
                 .orElseThrow(ChannelNotFoundException::new);
     }
+
+    /**
+     * Applies non-null field updates from a partial Post object to an existing
+     * Post.
+     *
+     * @param existingPost the Post to update
+     * @param updates      the Post containing fields to update
+     */
+    private void applyPostUpdates(Post existingPost, Post updates) {
+        if (updates.getKeywords() != null) {
+            existingPost.setKeywords(updates.getKeywords());
+        }
+        if (updates.getAt() != null) {
+            existingPost.setAt(updates.getAt());
+        }
+        if (updates.getLastUpdate() != null) {
+            existingPost.setLastUpdate(updates.getLastUpdate());
+        }
+        if (updates.getVisibility() != null) {
+            existingPost.setVisibility(updates.getVisibility());
+        }
+        if (updates.getContent() != null) {
+            existingPost.setContent(updates.getContent());
+        }
+        if (updates.getStatus() != null) {
+            existingPost.setStatus(updates.getStatus());
+        }
+    }
+
+    // /**
+    // * Saves a new Post.
+    // *
+    // * @param post the Post to create
+    // * @param medias media files attached to the post
+    // * @param covers cover images attached to the post
+    // * @return the persisted Post
+    // */
+    // @Transactional
+    // public Post save(Post post, List<MultipartFile> medias, List<MultipartFile>
+    // covers) {
+    // log.debug("Request to save Post : {} | {}x file(s) and {}x cover(s)",
+    // post, medias.size(), covers.size());
+
+    // // Validate content
+    // validatePostContent(post.getContent());
+    // return channelService.findOneByCurrentUser()
+    // .map(channel -> {
+    // // Save media files
+    // List<File> files = fileService.save(medias, covers);
+    // // Prepare entity
+    // post.status(Status.VALIDATED)
+    // .at(Instant.now())
+    // .files(new HashSet<>(files))
+    // .channel(channel);
+    // // Persist
+    // return postRepository.save(post);
+    // })
+    // .orElseThrow(ChannelNotFoundException::new);
+    // }
+
+    // /**
+    // * Updates an existing Post.
+    // * May also delete files listed in deletedMedias.
+    // *
+    // * @param post the Post containing updated fields
+    // * @param deletedMedias files to remove
+    // * @param medias new media files to add
+    // * @param covers new cover files to add
+    // * @return the updated Post
+    // */
+    // public Post update(Post post, List<File> deletedMedias,
+    // List<MultipartFile> medias, List<MultipartFile> covers) {
+
+    // log.debug("Request to update Post : {} | {}x file(s), {}x cover(s), {}x to
+    // delete",
+    // post, medias.size(), covers.size(), deletedMedias.size());
+
+    // // Validate content
+    // validatePostContent(post.getContent());
+    // return channelService.findOneByCurrentUser()
+    // .map(channel -> postRepository.findById(post.getId())
+    // .map(existingPost -> {
+    // // Ownership check
+    // if (!channel.getId().equals(existingPost.getChannel().getId())) {
+    // throw new UnauthorizedResourceAccessException(
+    // channel.getUser(), existingPost.getId(), ENTITY_NAME);
+    // }
+    // // Save new files
+    // List<File> newFiles = fileService.save(medias, covers);
+    // existingPost.getFiles().addAll(newFiles);
+    // // Apply updates
+    // if (post.getKeywords() != null)
+    // existingPost.setKeywords(post.getKeywords());
+    // if (post.getAt() != null)
+    // existingPost.setAt(post.getAt());
+    // if (post.getLastUpdate() != null)
+    // existingPost.setLastUpdate(post.getLastUpdate());
+    // if (post.getVisibility() != null)
+    // existingPost.setVisibility(post.getVisibility());
+    // if (post.getContent() != null)
+    // existingPost.setContent(post.getContent());
+    // if (post.getStatus() != null)
+    // existingPost.setStatus(post.getStatus());
+    // // Persist before deleting files
+    // postRepository.save(existingPost);
+    // // Delete removed files (irreversible)
+    // fileService.delete(deletedMedias);
+    // return existingPost;
+    // })
+    // .orElseThrow(
+    // () -> new ResourceNotFoundException("Entity not found", ENTITY_NAME,
+    // "idnotfound")))
+    // .orElseThrow(ChannelNotFoundException::new);
+    // }
 
     /**
      * Validate post content for creation or update.

@@ -3,16 +3,15 @@ package org.ngelmakproject.web.rest;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
-import org.ngelmakproject.domain.File;
 import org.ngelmakproject.domain.Post;
 import org.ngelmakproject.service.PostService;
 import org.ngelmakproject.web.rest.dto.FeedPageDTO;
 import org.ngelmakproject.web.rest.dto.PageDTO;
 import org.ngelmakproject.web.rest.dto.PostDTO;
+import org.ngelmakproject.web.rest.dto.PostRequestDTO;
 import org.ngelmakproject.web.rest.dto.Trending;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
 import org.ngelmakproject.web.rest.util.HeaderUtil;
@@ -26,14 +25,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 
 /**
  * REST controller for managing {@link org.ngelmakproject.domain.Post}.
@@ -58,60 +56,76 @@ public class PostResource {
     /**
      * {@code POST  /posts} : Create a new post.
      *
-     * @param post the post to create.
+     * @param request the post creation request containing the post entity and
+     *                optional
+     *                media/cover files (multipart or URLs).
      * @return the {@link ResponseEntity} with status {@code 201 (Created)} and with
      *         body the new post, or with status {@code 400 (Bad Request)} if the
      *         post has already an ID.
-     * @throws URISyntaxException if the Location URI syntax is incorrect.
      */
     @PostMapping("")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<PostDTO> createPost(@RequestPart Post post,
-            @RequestPart(required = false) Optional<List<MultipartFile>> _medias,
-            @RequestPart(required = false) Optional<List<MultipartFile>> _covers)
-            throws URISyntaxException {
-        List<MultipartFile> medias = _medias.orElse(List.of());
-        List<MultipartFile> covers = _covers.orElse(List.of());
-        log.info("REST request to save Post : {} + {}x media(s) and {}x cover(s)", post, medias.size(), covers.size());
-        if (post.getId() != null) {
-            throw new BadRequestAlertException("A new post cannot already have an ID", ENTITY_NAME, "idexists");
+    public ResponseEntity<PostDTO> createPost(@ModelAttribute PostRequestDTO request) {
+        log.info("REST request to save Post : {} + {}x media(s), {}x media URL(s), "
+                + "{}x cover(s), and {}x cover URL(s)",
+                request.post(),
+                request.medias().size(), request.mediaUrls().size(),
+                request.covers().size(), request.coverUrls().size());
+
+        if (request.post().getId() != null) {
+            throw new BadRequestAlertException("A new post cannot already have an ID",
+                    ENTITY_NAME, "idexists");
         }
-        post = postService.save(post, medias, covers);
-        return ResponseEntity.ok().body(PostDTO.from(post, null));
+
+        Post savedPost = postService.save(
+                request.post(),
+                request.medias(),
+                request.mediaUrls(),
+                request.covers(),
+                request.coverUrls());
+        return ResponseEntity.ok()
+                .body(PostDTO.from(savedPost, null));
     }
 
     /**
-     * {@code PUT  /posts/:id} : Updates an existing post.
+     * {@code PUT  /posts} : Update an existing post.
      *
-     * @param id   the id of the post to save.
-     * @param post the post to update.
+     * @param request the post update request containing the post entity, files/URLs
+     *                to add,
+     *                and file/resource IDs to delete.
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body
-     *         the updated post,
-     *         or with status {@code 400 (Bad Request)} if the post is not valid,
-     *         or with status {@code 500 (Internal Server Error)} if the post
-     *         couldn't be updated.
+     *         the updated post, or with status {@code 400 (Bad Request)} if the
+     *         post
+     *         is not valid, or with status {@code 500 (Internal Server Error)} if
+     *         the
+     *         post couldn't be updated.
      * @throws URISyntaxException if the Location URI syntax is incorrect.
-     * @throws IOException
+     * @throws IOException        if file operations fail.
      */
     @PutMapping("")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<PostDTO> updatePost(
-            @RequestPart Post post,
-            @RequestPart(required = false) Optional<List<File>> _deletedFiles,
-            @RequestPart(required = false) Optional<List<MultipartFile>> _medias,
-            @RequestPart(required = false) Optional<List<MultipartFile>> _covers)
+    public ResponseEntity<PostDTO> updatePost(@ModelAttribute PostRequestDTO request)
             throws URISyntaxException, IOException {
-        List<File> deletedFiles = _deletedFiles.orElse(List.of());
-        List<MultipartFile> medias = _medias.orElse(List.of());
-        List<MultipartFile> covers = _covers.orElse(List.of());
-        log.info("REST request to save Post : {} | {}x media(s), {}x cover(s), and {}x to be deleted", post,
-                medias.size(), covers.size(), deletedFiles.size());
-        if (post.getId() == null) {
+        log.info("REST request to update Post : {} | {}x media(s), {}x media URL(s), "
+                + "{}x cover(s), {}x cover URL(s), and {}x to be deleted",
+                request.post(),
+                request.medias().size(), request.mediaUrls().size(),
+                request.covers().size(), request.coverUrls().size(),
+                request.deletedFileIds().size());
+
+        if (request.post().getId() == null) {
             throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
         }
-        post = postService.update(post, deletedFiles, medias, covers);
+
+        Post updatedPost = postService.update(
+                request.post(),
+                request.deletedFileIds(),
+                request.medias(),
+                request.mediaUrls(),
+                request.covers(),
+                request.coverUrls());
         return ResponseEntity.ok()
-                .body(PostDTO.from(post, null));
+                .body(PostDTO.from(updatedPost, null));
     }
 
     /**

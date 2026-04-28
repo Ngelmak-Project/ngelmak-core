@@ -130,6 +130,69 @@ public class FileService {
         return result;
     }
 
+    public List<File> saveFromUrls(List<String> mediaUrls, List<String> coverUrls) {
+        log.debug("Request to save {}x file(s) and {}x cover(s)", mediaUrls.size(), coverUrls.size());
+        if (mediaUrls.isEmpty()) {
+            return List.of();
+        }
+
+        List<File> prepared = new ArrayList<>();
+        Map<String, String> hashToUrl = new HashMap<>();
+
+        for (int i = 0; i < mediaUrls.size(); i++) {
+            // MEDIA
+            String mediaUrl = mediaUrls.get(i);
+            File media = fromUrlToFile(mediaUrl); // New method - see below
+            prepared.add(media);
+            hashToUrl.put(media.getHash(), mediaUrl);
+
+            // COVER (optional)
+            String coverUrl = coverUrls.get(i);
+            if (coverUrl != null && !coverUrl.isBlank()) {
+                File cover = fromUrlToFile(coverUrl);
+                media.setCover(cover);
+                prepared.add(cover);
+                hashToUrl.put(cover.getHash(), coverUrl);
+            }
+        }
+
+        // Load existing files by hash
+        Map<String, File> existing = fileRepository.findByHashIn(hashToUrl.keySet())
+                .stream()
+                .collect(Collectors.toMap(File::getHash, f -> f));
+
+        // Persist only new files (without downloading)
+        List<File> newFiles = prepared.stream()
+                .filter(f -> !existing.containsKey(f.getHash()))
+                .map(f -> {
+                    f.setUrl(hashToUrl.get(f.getHash())); // Set URL directly
+                    f.setCreatedAt(Instant.now());
+                    return f;
+                })
+                .map(fileRepository::save)
+                .toList();
+
+        // Combine new + existing
+        List<File> result = new ArrayList<>(newFiles);
+        result.addAll(existing.values());
+
+        // Batch increment usageCount
+        List<Long> ids = result.stream().map(File::getId).toList();
+        fileRepository.incrementUsageCount(ids);
+
+        return result;
+    }
+
+    private File fromUrlToFile(String url) {
+        String filename = url.replaceAll(".*/", "").split("[?#]")[0];
+        File file = new File();
+        file.setFilename(filename);
+        file.setUrl(url);
+        file.setHash(url);
+        file.setSize(0L); // You don't know the size without downloading
+        return file;
+    }
+
     /**
      * Marks the given files for deletion by decrementing their usage count.
      * Actual removal is handled later by the cleanup cron.
@@ -224,5 +287,4 @@ public class FileService {
             throw new RuntimeException("Unable to compute hash", e);
         }
     }
-
 }
