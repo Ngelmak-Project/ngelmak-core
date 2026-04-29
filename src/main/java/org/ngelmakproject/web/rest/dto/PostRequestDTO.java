@@ -26,7 +26,8 @@ import jakarta.validation.constraints.NotNull;
  *                       operations (optional, defaults to empty list)
  */
 public record PostRequestDTO(
-        @NotNull(message = "Post cannot be null") Post post,
+        @NotNull(message = "Post cannot be null")
+        @RequestPart(required = true) Post post,
 
         @RequestPart(required = false) List<MultipartFile> medias,
 
