@@ -22,7 +22,7 @@ import jakarta.validation.constraints.NotNull;
  *                       defaults to empty list)
  * @param coverUrls      URLs of external cover/thumbnail resources (optional,
  *                       defaults to empty list)
- * @param deletedFileIds file IDs or resource IDs to delete during update
+ * @param deletedFileUrls file IDs or resource IDs to delete during update
  *                       operations (optional, defaults to empty list)
  */
 public record PostRequestDTO(
@@ -37,7 +37,7 @@ public record PostRequestDTO(
 
         @RequestPart(required = false) List<String> coverUrls,
 
-        @RequestPart(required = false) List<String> deletedFileIds) {
+        @RequestPart(required = false) List<String> deletedFileUrls) {
 
     /**
      * Compact constructor to apply defaults for optional file and URL lists.
@@ -47,6 +47,6 @@ public record PostRequestDTO(
         mediaUrls = mediaUrls != null ? mediaUrls : List.of();
         covers = covers != null ? covers : List.of();
         coverUrls = coverUrls != null ? coverUrls : List.of();
-        deletedFileIds = deletedFileIds != null ? deletedFileIds : List.of();
+        deletedFileUrls = deletedFileUrls != null ? deletedFileUrls : List.of();
     }
 }

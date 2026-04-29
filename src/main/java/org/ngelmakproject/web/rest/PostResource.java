@@ -33,6 +33,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.validation.Valid;
+
 /**
  * REST controller for managing {@link org.ngelmakproject.domain.Post}.
  */
@@ -65,7 +67,7 @@ public class PostResource {
      */
     @PostMapping("")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<PostDTO> createPost(@ModelAttribute PostRequestDTO request) {
+    public ResponseEntity<PostDTO> createPost(@Valid PostRequestDTO request) {
         log.info("REST request to save Post : {} + {}x media(s), {}x media URL(s), "
                 + "{}x cover(s), and {}x cover URL(s)",
                 request.post(),
@@ -111,7 +113,7 @@ public class PostResource {
                 request.post(),
                 request.medias().size(), request.mediaUrls().size(),
                 request.covers().size(), request.coverUrls().size(),
-                request.deletedFileIds().size());
+                request.deletedFileUrls().size());
 
         if (request.post().getId() == null) {
             throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
@@ -119,7 +121,7 @@ public class PostResource {
 
         Post updatedPost = postService.update(
                 request.post(),
-                request.deletedFileIds(),
+                request.deletedFileUrls(),
                 request.medias(),
                 request.mediaUrls(),
                 request.covers(),
