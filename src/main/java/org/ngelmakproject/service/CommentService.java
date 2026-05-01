@@ -84,6 +84,7 @@ public class CommentService {
      * @throws ChannelNotFoundException if the current user has no associated
      *                                  channel
      */
+    @Transactional(readOnly = true)
     public Comment save(Comment comment, Optional<MultipartFile> media) {
         log.debug("Request to save Comment : {} | {} file(s)",
                 comment, media.isPresent() ? 1 : 0);
@@ -154,6 +155,7 @@ public class CommentService {
      * @throws ChannelNotFoundException            if the current user has no
      *                                             associated channel
      */
+    @Transactional(readOnly = true)
     public Comment update(Comment comment, Optional<MultipartFile> media, Optional<File> deletedFile) {
         log.debug("Request to update Comment : {} | {} file(s)",
                 comment, media.isPresent() ? 1 : 0);
@@ -167,7 +169,7 @@ public class CommentService {
                         () -> new ResourceNotFoundException("Entity not found", ENTITY_NAME, "idnotfound"));
 
         // If the key is found then remove.
-        removeRedisById(comment.getId());
+        removeRedisById(existing.getId());
 
         // Ownership check
         if (!channel.getId().equals(existing.getChannel().getId())) {
@@ -184,6 +186,7 @@ public class CommentService {
             existing.setFile(newFiles.stream().findFirst().orElse(null));
         }
 
+        // Save to Redis
         Operation<Comment> op = new Operation<>(
                 existing.getId(),
                 OperationType.UPDATE,
@@ -217,6 +220,7 @@ public class CommentService {
      * @throws UnauthorizedResourceAccessException if the comment does not belong to
      *                                             the current user
      */
+    @Transactional(readOnly = true)
     public void delete(Long id) {
         log.debug("Request to delete Comment : {}", id);
         var channel = channelService.findOneByCurrentUser()
