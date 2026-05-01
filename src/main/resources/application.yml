@@ -28,7 +28,8 @@ spring:
   datasource:
     # hikari:
     #   initialization-fail-timeout: 0
-    url: jdbc:postgresql://ngelmak-pgdb:5432/ngelmakdb
+    url: jdbc:postgresql://192.168.1.59:5432/ngelmakdb
+    # url: jdbc:postgresql://ngelmak-pgdb:5432/ngelmakdb
     username: app_migrator
     password: migratorpass
 
@@ -36,7 +37,18 @@ spring:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: update # Use application-bootstrap.yml for updating the database schema
-
+  data:
+    redis:
+      # host: ngelmak-redis
+      host: 192.168.1.59
+      port: 6379
+      timeout: 60000ms
+      jedis:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
   liquibase:
     enabled: false
 

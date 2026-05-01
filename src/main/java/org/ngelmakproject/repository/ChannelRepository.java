@@ -3,10 +3,10 @@ package org.ngelmakproject.repository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.Queue;
 
 import org.ngelmakproject.domain.Channel;
 import org.ngelmakproject.repository.projection.ActiveChannelProjection;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -19,6 +19,7 @@ import org.springframework.stereotype.Repository;
 @SuppressWarnings("unused")
 @Repository
 public interface ChannelRepository extends JpaRepository<Channel, Long> {
+    @Cacheable(value = "channel", key = "#id")
 	Optional<Channel> findOneByUser(Long id);
 
 	Optional<Channel> findOneByIdentifier(String identifier);

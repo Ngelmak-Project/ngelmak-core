@@ -1,8 +1,5 @@
 package org.ngelmakproject.web.rest;
 
-import java.net.URI;
-import java.net.URISyntaxException;
-
 import org.ngelmakproject.domain.Reaction;
 import org.ngelmakproject.service.ReactionService;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
@@ -49,20 +46,15 @@ public class ReactionResource {
      *         body the new reaction, or with status {@code 400 (Bad Request)} if
      *         the
      *         reaction has already an ID.
-     * @throws URISyntaxException if the Location URI syntax is incorrect.
      */
     @PostMapping("")
-    public ResponseEntity<Reaction> createReaction(@Valid @RequestBody Reaction reaction)
-            throws URISyntaxException {
+    public ResponseEntity<Reaction> createReaction(@Valid @RequestBody Reaction reaction) {
         log.debug("REST request to save Reaction : {}", reaction);
         if (reaction.getId() != null) {
             throw new BadRequestAlertException("A new reaction cannot already have an ID", ENTITY_NAME, "idexists");
         }
         reaction = reactionService.save(reaction);
-        return ResponseEntity.created(new URI("/api/reactions/" + reaction.getId()))
-                .headers(
-                        HeaderUtil.createEntityCreationAlert(applicationName, ENTITY_NAME, reaction.getId().toString()))
-                .body(reaction);
+        return ResponseEntity.ok().body(reaction);
     }
 
     /**
@@ -76,19 +68,16 @@ public class ReactionResource {
      *         valid,
      *         or with status {@code 500 (Internal Server Error)} if the reaction
      *         couldn't be updated.
-     * @throws URISyntaxException if the Location URI syntax is incorrect.
      */
     @PutMapping("")
     public ResponseEntity<Reaction> updateReaction(
-            @Valid @RequestBody Reaction reaction) throws URISyntaxException {
+            @Valid @RequestBody Reaction reaction) {
         log.debug("REST request to update Reaction : {}", reaction);
         if (reaction.getId() == null) {
             throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
         }
         reaction = reactionService.update(reaction);
-        return ResponseEntity.ok()
-                .headers(HeaderUtil.createEntityUpdateAlert(applicationName, ENTITY_NAME, reaction.getId().toString()))
-                .body(reaction);
+        return ResponseEntity.ok().body(reaction);
     }
 
     /**

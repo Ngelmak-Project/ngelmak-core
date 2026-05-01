@@ -35,7 +35,7 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, Long
 			""")
 	List<Subscription> findAllByChannelInvolved(@Param("channelId") Long channelId);
 
-	List<Subscription> findBySubscribedTo(Channel subscribedTo);
+	List<Subscription> findBySubscribedToIn(List<Channel> subscribedTo);
 
 	@Query("SELECT s FROM Subscription s WHERE s.subscribedTo.id = :channelId")
 	List<Subscription> findBySubscribedTo(@Param("channelId") Long channelId);

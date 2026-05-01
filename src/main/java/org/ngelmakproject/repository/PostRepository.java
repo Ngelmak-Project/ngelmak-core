@@ -8,6 +8,8 @@ import java.util.Optional;
 import org.ngelmakproject.domain.Channel;
 import org.ngelmakproject.domain.Post;
 import org.ngelmakproject.domain.Post.Status;
+import org.ngelmakproject.repository.projection.CommentProjection;
+import org.ngelmakproject.repository.projection.PostProjection;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -26,6 +28,24 @@ import jakarta.persistence.PersistenceException;
 @Repository
 public interface PostRepository extends JpaRepository<Post, Long> {
 	Optional<Post> findById(Long id);
+
+	Optional<PostProjection> findProjectedById(Long id);
+
+	@Modifying
+	@Query("UPDATE Post p SET p.deletedAt = :ts WHERE p.id IN :ids")
+	int softDeleteByIds(List<Long> ids, @Param("ts") Instant ts);
+
+	@Query("SELECT p FROM Post p WHERE p.deletedAt < :cutoff")
+	List<PostProjection> findExpiredPosts(Instant cutoff);
+
+	@Query("""
+			SELECT pf.file.id FROM
+			Post p
+			LEFT JOIN
+			FETCH p.files pf
+			WHERE p.deletedAt<:cutoff
+			""")
+	List<Long> findFileIdsForExpiredPosts(Instant cutoff);
 
 	@Query(value = """
 			SELECT p.*,

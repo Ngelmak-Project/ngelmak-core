@@ -17,4 +17,7 @@ import org.springframework.stereotype.Repository;
 public interface ReactionRepository extends JpaRepository<Reaction, Long> {
   @Query("SELECT r FROM Reaction r WHERE r.post.id IN :postIds")
   List<Reaction> findByPostIds(List<Long> postIds);
+
+  @Query("SELECT r FROM Reaction r WHERE r.post.id IN :postIds and r.channel.id IN :channelIds")
+  List<Reaction> findByPostInAndChannelIn(List<Long> postIds, List<Long> channelIds);
 }

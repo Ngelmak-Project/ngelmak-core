@@ -6,7 +6,9 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -21,6 +23,9 @@ import org.ngelmakproject.repository.FeedRepository;
 import org.ngelmakproject.repository.PostRepository;
 import org.ngelmakproject.repository.ReactionRepository;
 import org.ngelmakproject.repository.SubscriptionRepository;
+import org.ngelmakproject.repository.projection.PostProjection;
+import org.ngelmakproject.service.operation.Operation;
+import org.ngelmakproject.service.operation.Operation.OperationType;
 import org.ngelmakproject.web.rest.dto.ActiveChannel;
 import org.ngelmakproject.web.rest.dto.FeedDTO;
 import org.ngelmakproject.web.rest.dto.FeedPageDTO;
@@ -40,6 +45,8 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -49,12 +56,17 @@ import org.springframework.web.multipart.MultipartFile;
  * {@link org.ngelmakproject.domain.Post}.
  */
 @Service
-@Transactional
 public class PostService {
 
     private static final Logger log = LoggerFactory.getLogger(PostService.class);
 
+    private record ReplyCountDTO(long id, int count) {
+    }
+
     private static final String ENTITY_NAME = "post";
+    private static final String REDIS_TRENDING_KEY = "post:trending";
+    private static final String REDIS_PENDING_KEY = "post:pending";
+    private static final String REDIS_PENDING_REPLY_COUNT_KEY = "post:pending:replycount";
     private final Instant windowStart = Instant.now().minus(50 * 365, ChronoUnit.DAYS);
 
     private final PostRepository postRepository;
@@ -63,19 +75,22 @@ public class PostService {
     private final ReactionRepository reactionRepository;
     private final FeedRepository feedRepository;
     private final SubscriptionRepository subscriptionRepository;
+    private final RedisTemplate<String, String> redisTemplate;
 
     PostService(PostRepository postRepository,
             FileService fileService,
             ReactionRepository reactionRepository,
             ChannelService channelService,
             FeedRepository feedRepository,
-            SubscriptionRepository subscriptionRepository) {
+            SubscriptionRepository subscriptionRepository,
+            RedisTemplate<String, String> redisTemplate) {
         this.postRepository = postRepository;
         this.reactionRepository = reactionRepository;
         this.feedRepository = feedRepository;
         this.fileService = fileService;
         this.subscriptionRepository = subscriptionRepository;
         this.channelService = channelService;
+        this.redisTemplate = redisTemplate;
     }
 
     /**
@@ -86,7 +101,7 @@ public class PostService {
      * @param covers cover images attached to the post
      * @return the persisted Post
      */
-    @Transactional
+    @Transactional(readOnly = true)
     public Post save(Post post, List<MultipartFile> medias, List<MultipartFile> covers) {
         log.debug("Request to save Post : {} | {}x file(s) and {}x cover(s)",
                 post, medias.size(), covers.size());
@@ -102,8 +117,16 @@ public class PostService {
                             .at(Instant.now())
                             .files(new HashSet<>(files))
                             .channel(channel);
-                    // Persist
-                    return postRepository.save(post);
+                    // Save to Redis
+                    long uuid = Instant.now().getEpochSecond();
+                    post.setId(uuid);
+                    Operation<Post> op = new Operation<>(
+                            uuid,
+                            OperationType.CREATE,
+                            post);
+                    redisTemplate.opsForHash()
+                            .put(REDIS_PENDING_KEY, op.id(), op.toJson());
+                    return post; // return immediately
                 })
                 .orElseThrow(ChannelNotFoundException::new);
     }
@@ -118,48 +141,56 @@ public class PostService {
      * @param covers        new cover files to add
      * @return the updated Post
      */
+    @Transactional(readOnly = true)
     public Post update(Post post, List<File> deletedMedias,
             List<MultipartFile> medias, List<MultipartFile> covers) {
-
         log.debug("Request to update Post : {} | {}x file(s), {}x cover(s), {}x to delete", post, medias.size(),
                 covers.size(), deletedMedias.size());
 
         // Validate content
         validatePostContent(post.getContent());
-        return channelService.findOneByCurrentUser()
-                .map(channel -> postRepository.findById(post.getId())
-                        .map(existingPost -> {
-                            // Ownership check
-                            if (!channel.getId().equals(existingPost.getChannel().getId())) {
-                                throw new UnauthorizedResourceAccessException(
-                                        channel.getUser(), existingPost.getId(), ENTITY_NAME);
-                            }
-                            // Save new files
-                            List<File> newFiles = fileService.save(medias, covers);
-                            existingPost.getFiles().addAll(newFiles);
-                            // Apply updates
-                            if (post.getKeywords() != null)
-                                existingPost.setKeywords(post.getKeywords());
-                            if (post.getAt() != null)
-                                existingPost.setAt(post.getAt());
-                            if (post.getLastUpdate() != null)
-                                existingPost.setLastUpdate(post.getLastUpdate());
-                            if (post.getVisibility() != null)
-                                existingPost.setVisibility(post.getVisibility());
-                            if (post.getContent() != null)
-                                existingPost.setContent(post.getContent());
-                            if (post.getStatus() != null)
-                                existingPost.setStatus(post.getStatus());
-                            // Persist before deleting files
-                            postRepository.save(existingPost);
-                            // Delete removed files (irreversible)
-                            fileService.delete(deletedMedias);
-                            return existingPost;
-                        })
-                        .orElseThrow(
-                                () -> new ResourceNotFoundException("Entity not found", ENTITY_NAME,
-                                        "idnotfound")))
-                .orElseThrow(ChannelNotFoundException::new);
+
+        var channel = channelService.findOneByCurrentUser().orElseThrow(ChannelNotFoundException::new);
+        return postRepository.findById(post.getId())
+                .map(existing -> {
+                    // Ownership check
+                    if (!channel.getId().equals(existing.getChannel().getId())) {
+                        throw new UnauthorizedResourceAccessException(
+                                channel.getUser(), existing.getId(), ENTITY_NAME);
+                    }
+
+                    // If the key is found then remove.
+                    removeRedisById(existing.getId());
+
+                    // Save new files
+                    List<File> newFiles = fileService.save(medias, covers);
+                    existing.getFiles().addAll(newFiles);
+                    // Apply updates
+                    if (post.getKeywords() != null)
+                        existing.setKeywords(post.getKeywords());
+                    if (post.getVisibility() != null)
+                        existing.setVisibility(post.getVisibility());
+                    if (post.getContent() != null)
+                        existing.setContent(post.getContent());
+                    if (post.getStatus() != null)
+                        existing.setStatus(post.getStatus());
+                    existing.setLastUpdate(Instant.now());
+
+                    // Save to Redis
+                    Operation<Post> op = new Operation<>(
+                            existing.getId(),
+                            OperationType.UPDATE,
+                            existing);
+                    redisTemplate.opsForHash()
+                            .put(REDIS_PENDING_KEY, op.id(), op.toJson());
+
+                    // Delete removed files (irreversible)
+                    fileService.delete(deletedMedias);
+                    return existing;
+                })
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Entity not found", ENTITY_NAME,
+                                "idnotfound"));
     }
 
     /**
@@ -184,6 +215,20 @@ public class PostService {
         }
     }
 
+    private boolean removeRedisById(long id) {
+        // If the key is found then remove.
+        Map<Object, Object> pendingOps = redisTemplate.opsForHash().entries(REDIS_PENDING_KEY);
+        for (Map.Entry<Object, Object> entry : pendingOps.entrySet()) {
+            Operation<Reaction> op = Operation.fromJson((String) entry.getValue());
+            if (op.id() == id) {
+                redisTemplate.opsForHash().delete(REDIS_PENDING_KEY, entry.getKey());
+                log.warn("Cancelled pending CREATE/UDATE for reaction {}", op.id());
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * Get one post by id.
      *
@@ -201,10 +246,24 @@ public class PostService {
      *
      * @param id the id of the entity.
      */
+    @Transactional(readOnly = true)
     public void delete(Long id) {
-        log.debug("Request to delete Post : {}", id);
-        throw new RuntimeException("Not Implemented...");
-        // postRepository.deleteById(id);
+        log.debug("Request to delete Comment : {}", id);
+        var channel = channelService.findOneByCurrentUser()
+                .orElseThrow(ChannelNotFoundException::new);
+
+        postRepository.findProjectedById(id).ifPresent(projection -> {
+            // Authorization check: ensure the comment belongs to the current user
+            if (!channel.getId().equals(projection.getChannelId())) {
+                throw new UnauthorizedResourceAccessException(
+                        channel.getUser(), id, ENTITY_NAME);
+            }
+
+            // No pending CREATE found → queue a DELETE operation
+            Operation<Long> deleteOp = Operation.deleteOperation(id);
+            redisTemplate.opsForHash()
+                    .put(REDIS_PENDING_KEY, deleteOp.id(), deleteOp.toJson());
+        });
     }
 
     /**
@@ -238,16 +297,18 @@ public class PostService {
      * This method is responsible of tracking and updating total comments of Posts.
      * <\p>
      * 
-     * [TODO] This method later should consider reading from Redis database and
      * update automatically the comment count.
      * It should be handle by a cron
      * 
      * @param postId
      * @param count  could be a positive or negative number.
      */
-    // @Scheduled(cron = "0 0 2 * * *") // Run daily at 2 AM
     public void updateCommmentCount(Long postId, Integer count) {
-        this.postRepository.updatePostCommentCount(postId, count);
+        // Record to redis for updating reply count.
+        Operation<ReplyCountDTO> defaultOp = Operation
+                .defaultOperation(new ReplyCountDTO(postId, count));
+        redisTemplate.opsForHash()
+                .put(REDIS_PENDING_REPLY_COUNT_KEY, defaultOp.id(), defaultOp.toJson());
     }
 
     /**
@@ -277,7 +338,6 @@ public class PostService {
      * - minimal channel information
      * - attached files
      * - aggregated reaction summaries (emoji → count + current user reaction)
-     * </p>
      *
      * @param channelId id of the channel to which the posts belong.
      * @param pageable
@@ -301,7 +361,6 @@ public class PostService {
      * 2. Fetching all reactions for all posts in one bulk query
      * 3. Building reaction summaries in memory
      * 4. Mapping everything into PostDTO objects
-     * <\p>
      * 
      * @param posts
      * @param channelId
@@ -336,16 +395,39 @@ public class PostService {
      * 
      * @param post
      */
-    public void propagatePostToFollowers(Post post) {
-        log.debug("Propagate Post to get all followers.");
-        List<Feed> feeds = subscriptionRepository.findBySubscribedTo(post.getChannel().getId()).stream()
-                .map(follower -> {
+    public void propagatePostToFollowers(List<Post> posts) {
+        log.debug("Propagating {} posts to followers", posts.size());
+
+        if (posts.isEmpty()) {
+            return;
+        }
+        // Extract channels from posts
+        List<Channel> channels = posts.stream()
+                .map(Post::getChannel)
+                .distinct()
+                .toList();
+
+        // Fetch all subscriptions for these channels
+        var subscriptions = subscriptionRepository.findBySubscribedToIn(channels);
+
+        // Build feeds
+        List<Feed> feeds = new ArrayList<>();
+        for (Post post : posts) {
+            Channel channel = post.getChannel();
+            for (var sub : subscriptions) {
+                if (sub.getSubscribedTo().equals(channel)) {
                     Feed feed = new Feed();
-                    feed.setFeedOwner(follower.getSubscriber());
+                    feed.setFeedOwner(sub.getSubscriber());
                     feed.setPost(post);
-                    return feed;
-                }).collect(Collectors.toList());
-        feedRepository.saveAll(feeds);
+                    feeds.add(feed);
+                }
+            }
+        }
+        // Save all feeds
+        if (!feeds.isEmpty()) {
+            feedRepository.saveAll(feeds);
+            log.info("Created {} feed entries for {} posts", feeds.size(), posts.size());
+        }
     }
 
     public FeedPageDTO<PostDTO> getFeedV3(Pageable pageable, String sessionKey) {
@@ -604,41 +686,200 @@ public class PostService {
      */
     public Trending getTrending() {
         log.debug("Trending...");
-        List<Post> mostCommentedPosts = postRepository.mostCommentedPosts(Instant.now().minus(30, ChronoUnit.DAYS),
-                PageRequest.of(0, 5));
-        List<Post> trendingPosts = postRepository.trendingPosts(
-                Instant.now().minus(30, ChronoUnit.DAYS),
-                PageRequest.of(0, 5));
+        String json = Optional.ofNullable(
+                redisTemplate.opsForValue().get(REDIS_TRENDING_KEY)).orElseGet(() -> {
+                    log.debug("🦋 Cache miss for trending, fetching from database");
 
-        // Extract post IDs from both lists
-        List<Long> postIds = Stream.concat(
-                mostCommentedPosts.stream().map(Post::getId),
-                trendingPosts.stream().map(Post::getId)).toList();
+                    List<Post> mostCommentedPosts = postRepository.mostCommentedPosts(
+                            Instant.now().minus(30, ChronoUnit.DAYS),
+                            PageRequest.of(0, 5));
+                    List<Post> trendingPosts = postRepository.trendingPosts(
+                            Instant.now().minus(30, ChronoUnit.DAYS),
+                            PageRequest.of(0, 5));
 
-        // Single bulk fetch for all reactions
-        List<Reaction> reactions = reactionRepository.findByPostIds(postIds);
-        Map<Long, List<Reaction>> reactionsByPost = ReactionService.groupReactionsByPost(reactions);
+                    // Extract post IDs from both lists
+                    List<Long> postIds = Stream.concat(
+                            mostCommentedPosts.stream().map(Post::getId),
+                            trendingPosts.stream().map(Post::getId)).toList();
 
-        // Map both lists to DTOs
-        List<PostDTO> mostCommentedPostDTOs = mostCommentedPosts.stream()
-                .map(post -> {
-                    List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
-                    ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions, null);
-                    return PostDTO.from(post, summary);
-                })
+                    // Single bulk fetch for all reactions
+                    List<Reaction> reactions = reactionRepository.findByPostIds(postIds);
+                    Map<Long, List<Reaction>> reactionsByPost = ReactionService.groupReactionsByPost(reactions);
+
+                    // Map both lists to DTOs
+                    List<PostDTO> mostCommentedPostDTOs = mostCommentedPosts.stream()
+                            .map(post -> {
+                                List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
+                                ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions, null);
+                                return PostDTO.from(post, summary);
+                            })
+                            .toList();
+
+                    List<PostDTO> trendingPostDTOs = trendingPosts.stream()
+                            .map(post -> {
+                                List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
+                                ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions, null);
+                                return PostDTO.from(post, summary);
+                            })
+                            .toList();
+
+                    List<ActiveChannel> topActiveChannels = channelService.getActiveChannels();
+
+                    Trending t = new Trending(topActiveChannels, trendingPostDTOs, mostCommentedPostDTOs);
+
+                    Operation<Trending> op = new Operation<>(0, OperationType.DEFAULT, t);
+
+                    return op.toJson();
+                });
+
+        Operation<Trending> op = Operation.fromJson(json);
+        log.debug("🦋 Cache hit for trending : {}", op.data());
+        return op.data();
+    }
+
+    /**
+     * Periodically flushes aggregated reply count updates from Redis to the
+     * database.
+     * 
+     * <p>
+     * Runs every 2 minutes, retrieving pending operations from Redis, aggregating
+     * count changes by comment ID, and applying batch updates to the database.
+     * </p>
+     */
+    @Scheduled(fixedDelay = 2, timeUnit = TimeUnit.MINUTES)
+    public void flushReplyCount() {
+        Map<Object, Object> entries = redisTemplate.opsForHash()
+                .entries(REDIS_PENDING_REPLY_COUNT_KEY);
+
+        if (entries.isEmpty()) {
+            return;
+        }
+
+        log.info("Flushing {} pending reply count operations", entries.size());
+
+        // Aggregate and apply updates in one operation
+        entries.values().stream()
+                .map(json -> Operation.<ReplyCountDTO>fromJson(json).data())
+                .collect(Collectors.toMap(
+                        ReplyCountDTO::id,
+                        ReplyCountDTO::count,
+                        Integer::sum))
+                .forEach(postRepository::updatePostCommentCount);
+
+        // Clear processed entries
+        redisTemplate.opsForHash().delete(REDIS_PENDING_REPLY_COUNT_KEY, entries.keySet());
+    }
+
+    /**
+     * Flushes pending Post operations from Redis to the database.
+     * Processes CREATE, UPDATE, and DELETE operations in batches.
+     * Scheduled every 30 seconds.
+     */
+    @Transactional
+    @Scheduled(fixedDelay = 30, timeUnit = TimeUnit.SECONDS)
+    public void flushPendingPosts() {
+        Map<Object, Object> entries = redisTemplate.opsForHash()
+                .entries(REDIS_PENDING_KEY);
+
+        if (entries.isEmpty()) {
+            return;
+        }
+
+        log.info("Flushing {} pending reaction operations", entries.size());
+
+        List<Post> toSave = new ArrayList<>();
+        List<Post> newlyCreated = new ArrayList<>();
+        List<Long> toDelete = new ArrayList<>();
+        List<Object> processedKeys = new ArrayList<>();
+        for (Map.Entry<Object, Object> entry : entries.entrySet()) {
+            Object key = entry.getKey();
+            String json = (String) entry.getValue();
+            Operation<Post> op = Operation.fromJson(json);
+            switch (op.type()) {
+                case CREATE -> {
+                    op.data().setId(null); // Clear ID for new comments
+                    toSave.add(op.data());
+                    newlyCreated.add(op.data()); // track new ones
+                    processedKeys.add(key);
+                }
+                case UPDATE -> {
+                    toSave.add(op.data());
+                    processedKeys.add(key);
+                }
+                case DELETE -> {
+                    toDelete.add(op.data().getId());
+                    processedKeys.add(key);
+                }
+                default -> {
+                }
+            }
+        }
+
+        if (!toSave.isEmpty()) {
+            // Save or update
+            postRepository.saveAll(toSave);
+            propagatePostToFollowers(newlyCreated);
+            log.info("Saved/updated {} reactions", toSave.size());
+        }
+
+        if (!toDelete.isEmpty()) {
+            postRepository.softDeleteByIds(toDelete, Instant.now());
+            log.info("Deleted {} reactions", toDelete.size());
+        }
+
+        if (!processedKeys.isEmpty()) {
+            redisTemplate.opsForHash().delete(REDIS_PENDING_KEY, processedKeys.toArray());
+            log.info("Removed {} processed operations from Redis", processedKeys.size());
+        }
+    }
+
+    /**
+     * Permanently deletes posts that were soft‑deleted more than 7 days ago.
+     *
+     * <p>
+     * This scheduled task performs a two‑phase cleanup:
+     * <ul>
+     * <li>Fetch expired posts using a lightweight projection (ID + fileId)</li>
+     * <li>Delete associated files in batch</li>
+     * <li>Hard‑delete the posts using a bulk delete</li>
+     * </ul>
+     *
+     * <p>
+     * No entities are loaded during this process. All operations rely on
+     * projections and batch operations for maximum efficiency.
+     * </p>
+     */
+    @Transactional
+    @Scheduled(cron = "0 0 3 * * *") // every day at 3 AM
+    public void purgeDeletedComments() {
+        Instant cutoff = Instant.now().minus(7, ChronoUnit.DAYS);
+
+        List<PostProjection> posts = postRepository.findExpiredPosts(cutoff);
+
+        if (posts.isEmpty()) {
+            return;
+        }
+
+        // Extract file IDs
+        List<Long> fileIds = posts.stream()
+                .flatMap(p -> p.getFiles().stream())
+                .map(f -> f.getId())
+                .filter(Objects::nonNull)
                 .toList();
 
-        List<PostDTO> trendingPostDTOs = trendingPosts.stream()
-                .map(post -> {
-                    List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
-                    ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions, null);
-                    return PostDTO.from(post, summary);
-                })
+        if (!fileIds.isEmpty()) {
+            fileService.deleteByIds(fileIds);
+        }
+
+        // Extract post IDs
+        List<Long> postIds = posts.stream()
+                .map(PostProjection::getId)
                 .toList();
 
-        List<ActiveChannel> topActiveChannels = channelService.getActiveChannels();
+        // Hard delete posts
+        postRepository.deleteAllByIdInBatch(postIds);
 
-        return new Trending(topActiveChannels, trendingPostDTOs, mostCommentedPostDTOs);
-
+        log.info("Purged {} posts and {} files older than {}",
+                postIds.size(), fileIds.size(), cutoff);
     }
 }

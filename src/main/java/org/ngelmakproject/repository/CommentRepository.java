@@ -129,6 +129,10 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 	int softDeleteById(@Param("id") Long id, @Param("ts") Instant ts);
 
 	@Modifying
+	@Query("UPDATE Comment c SET c.deletedAt = :ts WHERE c.id IN :ids")
+	int softDeleteByIds(List<Long> ids, @Param("ts") Instant ts);
+
+	@Modifying
 	@Query("""
 			    UPDATE Comment c
 			    SET c.deletedAt = :ts

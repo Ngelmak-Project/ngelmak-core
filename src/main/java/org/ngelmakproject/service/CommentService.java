@@ -2,21 +2,29 @@ package org.ngelmakproject.service;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import org.ngelmakproject.config.Constants;
 import org.ngelmakproject.domain.Comment;
 import org.ngelmakproject.domain.File;
+import org.ngelmakproject.domain.Reaction;
 import org.ngelmakproject.repository.CommentRepository;
 import org.ngelmakproject.repository.projection.CommentProjection;
+import org.ngelmakproject.service.operation.Operation;
+import org.ngelmakproject.service.operation.Operation.OperationType;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
 import org.ngelmakproject.web.rest.errors.ChannelNotFoundException;
 import org.ngelmakproject.web.rest.errors.ResourceNotFoundException;
 import org.ngelmakproject.web.rest.errors.UnauthorizedResourceAccessException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,23 +35,30 @@ import org.springframework.web.multipart.MultipartFile;
  * {@link org.ngelmakproject.domain.Comment}.
  */
 @Service
-@Transactional
 public class CommentService {
 
     private static final String ENTITY_NAME = "comment";
+    private static final String REDIS_PENDING_KEY = "comment:pending";
+    private static final String REDIS_PENDING_REPLY_COUNT_KEY = "comment:pending:replycount";
     private static final Logger log = LoggerFactory.getLogger(CommentService.class);
+
+    private record ReplyCountDTO(long id, int count) {
+    }
 
     private final FileService fileService;
     private final PostService postService;
     private final ChannelService channelService;
     private final CommentRepository commentRepository;
+    private final RedisTemplate<String, String> redisTemplate;
 
     public CommentService(CommentRepository commentRepository, FileService fileService,
-            ChannelService channelService, PostService postService) {
+            ChannelService channelService, PostService postService,
+            RedisTemplate<String, String> redisTemplate) {
         this.commentRepository = commentRepository;
         this.fileService = fileService;
         this.channelService = channelService;
         this.postService = postService;
+        this.redisTemplate = redisTemplate;
     }
 
     /**
@@ -72,34 +87,46 @@ public class CommentService {
     public Comment save(Comment comment, Optional<MultipartFile> media) {
         log.debug("Request to save Comment : {} | {} file(s)",
                 comment, media.isPresent() ? 1 : 0);
-        // 1. Validate content
+        // Validate content
         validateCommentContent(comment.getContent());
-        return channelService.findOneByCurrentUser()
-                .map(channel -> {
-                    // 2. Save media (if provided)
-                    List<MultipartFile> mediaList = media
-                            .map(List::of)
-                            .orElse(List.of());
-                    List<File> savedFiles = fileService.save(mediaList);
-                    // 3. Prepare the comment entity
-                    comment.at(Instant.now())
-                            .file(savedFiles.stream().findFirst().orElse(null))
-                            .channel(channel);
-                    // 4. Update counters (post or parent comment)
-                    if (comment.getPost() != null) {
-                        postService.updateCommmentCount(comment.getPost().getId(), 1);
-                    } else if (comment.getReplyTo() != null) {
-                        updateReplyCount(comment.getReplyTo().getId(), 1);
-                    } else {
-                        throw new BadRequestAlertException(
-                                "A comment must refer to either a Post or another Comment.",
-                                ENTITY_NAME,
-                                "missingPostOrComment");
-                    }
-                    // 5. Persist
-                    return commentRepository.save(comment);
-                })
+
+        var channel = channelService.findOneByCurrentUser()
                 .orElseThrow(ChannelNotFoundException::new);
+        // Save media (if provided)
+        List<MultipartFile> mediaList = media
+                .map(List::of)
+                .orElse(List.of());
+        List<File> savedFiles = fileService.save(mediaList);
+        // Prepare the comment entity
+        comment.at(Instant.now())
+                .file(savedFiles.stream().findFirst().orElse(null))
+                .channel(channel);
+        // Update counters (post or parent comment)
+        if (comment.getPost() != null) {
+            postService.updateCommmentCount(comment.getPost().getId(), 1);
+        } else if (comment.getReplyTo() != null) {
+            // Record to redis for updating reply count.
+            Operation<ReplyCountDTO> defaultOp = Operation
+                    .defaultOperation(new ReplyCountDTO(comment.getReplyTo().getId(), 1));
+            redisTemplate.opsForHash()
+                    .put(REDIS_PENDING_REPLY_COUNT_KEY, defaultOp.id(), defaultOp.toJson());
+        } else {
+            throw new BadRequestAlertException(
+                    "A comment must refer to either a Post or another Comment.",
+                    ENTITY_NAME,
+                    "missingPostOrComment");
+        }
+        // Persist to redis
+        long uuid = Instant.now().getEpochSecond();
+        comment.setId(uuid);
+        Operation<Comment> op = new Operation<>(
+                uuid,
+                OperationType.CREATE,
+                comment);
+        redisTemplate.opsForHash()
+                .put(REDIS_PENDING_KEY, op.id(), op.toJson());
+
+        return comment; // return immediately
     }
 
     /**
@@ -130,73 +157,41 @@ public class CommentService {
     public Comment update(Comment comment, Optional<MultipartFile> media, Optional<File> deletedFile) {
         log.debug("Request to update Comment : {} | {} file(s)",
                 comment, media.isPresent() ? 1 : 0);
-        // 1. Validate content
+        // Validate content
         validateCommentContent(comment.getContent());
-        return channelService.findOneByCurrentUser()
-                .map(channel -> commentRepository.findById(comment.getId())
-                        .map(existingComment -> {
-                            // 2. Ownership check
-                            if (!channel.getId().equals(existingComment.getChannel().getId())) {
-                                throw new UnauthorizedResourceAccessException(
-                                        channel.getUser(), existingComment.getId(), ENTITY_NAME);
-                            }
-                            // 3. Update fields
-                            existingComment.setLastUpdate(Instant.now());
-                            existingComment.setContent(comment.getContent());
-                            // 4. Handle media update
-                            if (media.isPresent()) {
-                                List<File> newFiles = fileService.save(List.of(media.get()));
-                                deletedFile.ifPresent(file -> fileService.delete(List.of(file)));
-                                existingComment.setFile(newFiles.stream().findFirst().orElse(null));
-                            }
-                            // 5. Persist
-                            return commentRepository.save(existingComment);
-                        })
-                        .orElseThrow(
-                                () -> new ResourceNotFoundException("Entity not found", ENTITY_NAME, "idnotfound")))
+
+        var channel = channelService.findOneByCurrentUser()
                 .orElseThrow(ChannelNotFoundException::new);
-    }
+        Comment existing = commentRepository.findById(comment.getId())
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Entity not found", ENTITY_NAME, "idnotfound"));
 
-    /**
-     * Validate comment content for creation or update.
-     * 
-     * @param content the content to validate
-     * @throws BadRequestAlertException if the content is null, blank, or exceeds
-     *                                  the maximum allowed length.
-     */
-    private void validateCommentContent(String content) {
-        if (content == null || content.isBlank()) {
-            throw new BadRequestAlertException(
-                    "Content cannot be empty.",
-                    ENTITY_NAME,
-                    "contentEmpty");
-        }
-        if (content.length() > Constants.MAX_COMMENT_LENGTH) {
-            throw new BadRequestAlertException(
-                    "Content too long (> " + Constants.MAX_COMMENT_LENGTH + " characters).",
-                    ENTITY_NAME,
-                    "contentTooLong");
-        }
-    }
+        // If the key is found then remove.
+        removeRedisById(comment.getId());
 
-    /**
-     * Update reply comments.
-     * 
-     * <p>
-     * This method is responsible of tracking and updating total replies on a
-     * comment.
-     * <\p>
-     * 
-     * [TODO] This method later should consider reading from Redis database and
-     * update automatically the comment count.
-     * It should be handle by a cron
-     * 
-     * @param commentId
-     * @param count     could be a positive or negative number.
-     */
-    // @Scheduled(cron = "0 0 2 * * *") // Run daily at 2 AM
-    public void updateReplyCount(Long commentId, Integer count) {
-        this.commentRepository.updateReplyCount(commentId, count);
+        // Ownership check
+        if (!channel.getId().equals(existing.getChannel().getId())) {
+            throw new UnauthorizedResourceAccessException(
+                    channel.getUser(), existing.getId(), ENTITY_NAME);
+        }
+        // Update fields
+        existing.setLastUpdate(Instant.now());
+        existing.setContent(comment.getContent());
+        // Handle media update
+        if (media.isPresent()) {
+            List<File> newFiles = fileService.save(List.of(media.get()));
+            deletedFile.ifPresent(file -> fileService.delete(List.of(file)));
+            existing.setFile(newFiles.stream().findFirst().orElse(null));
+        }
+
+        Operation<Comment> op = new Operation<>(
+                existing.getId(),
+                OperationType.UPDATE,
+                existing);
+        redisTemplate.opsForHash()
+                .put(REDIS_PENDING_KEY, op.id(), op.toJson());
+
+        return existing;
     }
 
     /**
@@ -224,34 +219,165 @@ public class CommentService {
      */
     public void delete(Long id) {
         log.debug("Request to delete Comment : {}", id);
-
         var channel = channelService.findOneByCurrentUser()
                 .orElseThrow(ChannelNotFoundException::new);
 
         commentRepository.findProjectedById(id).ifPresent(projection -> {
-
             // Authorization check: ensure the comment belongs to the current user
             if (!channel.getId().equals(projection.getChannelId())) {
                 throw new UnauthorizedResourceAccessException(
                         channel.getUser(), id, ENTITY_NAME);
             }
 
-            // Soft delete using JPQL update (no entity loading)
-            commentRepository.softDeleteById(id, Instant.now());
+            // No pending CREATE found → queue a DELETE operation
+            Operation<Long> deleteOp = Operation.deleteOperation(id);
+            redisTemplate.opsForHash()
+                    .put(REDIS_PENDING_KEY, deleteOp.id(), deleteOp.toJson());
 
-            // TODO: Record deletion event in Redis for async processing
             // Update counters depending on comment type
             if (projection.getPostId() != null) {
                 postService.updateCommmentCount(projection.getPostId(), -1);
             } else if (projection.getReplyToId() != null) {
-                updateReplyCount(projection.getReplyToId(), -1);
+                // Record to redis for updating reply count.
+                Operation<ReplyCountDTO> defaultOp = Operation
+                        .defaultOperation(new ReplyCountDTO(projection.getReplyToId(), -1));
+                redisTemplate.opsForHash()
+                        .put(REDIS_PENDING_REPLY_COUNT_KEY, defaultOp.id(), defaultOp.toJson());
             }
-            // else: root comment with no parent — nothing to update
         });
     }
 
     /**
-     * Permanently deletes comments that were soft‑deleted more than 30 days ago.
+     * Validate comment content for creation or update.
+     * 
+     * @param content the content to validate
+     * @throws BadRequestAlertException if the content is null, blank, or exceeds
+     *                                  the maximum allowed length.
+     */
+    private void validateCommentContent(String content) {
+        if (content == null || content.isBlank()) {
+            throw new BadRequestAlertException(
+                    "Content cannot be empty.",
+                    ENTITY_NAME,
+                    "contentEmpty");
+        }
+        if (content.length() > Constants.MAX_COMMENT_LENGTH) {
+            throw new BadRequestAlertException(
+                    "Content too long (> " + Constants.MAX_COMMENT_LENGTH + " characters).",
+                    ENTITY_NAME,
+                    "contentTooLong");
+        }
+    }
+
+    private boolean removeRedisById(long id) {
+        // If the key is found then remove.
+        Map<Object, Object> pendingOps = redisTemplate.opsForHash().entries(REDIS_PENDING_KEY);
+        for (Map.Entry<Object, Object> entry : pendingOps.entrySet()) {
+            Operation<Reaction> op = Operation.fromJson((String) entry.getValue());
+            if (op.id() == id) {
+                redisTemplate.opsForHash().delete(REDIS_PENDING_KEY, entry.getKey());
+                log.warn("Cancelled pending CREATE/UDATE for reaction {}", op.id());
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Periodically flushes aggregated reply count updates from Redis to the
+     * database.
+     * 
+     * <p>
+     * Runs every 2 minutes, retrieving pending operations from Redis, aggregating
+     * count changes by comment ID, and applying batch updates to the database.
+     * </p>
+     */
+    @Scheduled(fixedDelay = 2, timeUnit = TimeUnit.MINUTES)
+    public void flushReplyCount() {
+        Map<Object, Object> entries = redisTemplate.opsForHash()
+                .entries(REDIS_PENDING_REPLY_COUNT_KEY);
+
+        if (entries.isEmpty()) {
+            return;
+        }
+
+        log.info("Flushing {} pending reply count operations", entries.size());
+
+        // Aggregate and apply updates in one operation
+        entries.values().stream()
+                .map(json -> Operation.<ReplyCountDTO>fromJson(json).data())
+                .collect(Collectors.toMap(
+                        ReplyCountDTO::id,
+                        ReplyCountDTO::count,
+                        Integer::sum))
+                .forEach(commentRepository::updateReplyCount);
+
+        // Clear processed entries
+        redisTemplate.opsForHash().delete(REDIS_PENDING_REPLY_COUNT_KEY, entries.keySet());
+    }
+
+    /**
+     * Flushes pending Comment operations from Redis to the database.
+     * Processes CREATE, UPDATE, and DELETE operations in batches.
+     * Scheduled every 2 minutes.
+     */
+    @Transactional
+    @Scheduled(fixedDelay = 2, timeUnit = TimeUnit.MINUTES)
+    public void flushPendingComments() {
+        Map<Object, Object> entries = redisTemplate.opsForHash()
+                .entries(REDIS_PENDING_KEY);
+
+        if (entries.isEmpty()) {
+            return;
+        }
+
+        log.info("Flushing {} pending reaction operations", entries.size());
+
+        List<Comment> toSave = new ArrayList<>();
+        List<Long> toDelete = new ArrayList<>();
+        List<Object> processedKeys = new ArrayList<>();
+        for (Map.Entry<Object, Object> entry : entries.entrySet()) {
+            Object key = entry.getKey();
+            String json = (String) entry.getValue();
+            Operation<Comment> op = Operation.fromJson(json);
+            switch (op.type()) {
+                case CREATE -> {
+                    op.data().setId(null); // Clear ID for new comments
+                    toSave.add(op.data());
+                    processedKeys.add(key);
+                }
+                case UPDATE -> {
+                    toSave.add(op.data());
+                    processedKeys.add(key);
+                }
+                case DELETE -> {
+                    toDelete.add(op.data().getId());
+                    processedKeys.add(key);
+                }
+                default -> {
+                }
+            }
+        }
+
+        if (!toSave.isEmpty()) {
+            // Save or update
+            commentRepository.saveAll(toSave);
+            log.info("Saved/updated {} reactions", toSave.size());
+        }
+
+        if (!toDelete.isEmpty()) {
+            commentRepository.softDeleteByIds(toDelete, Instant.now());
+            log.info("Deleted {} reactions", toDelete.size());
+        }
+
+        if (!processedKeys.isEmpty()) {
+            redisTemplate.opsForHash().delete(REDIS_PENDING_KEY, processedKeys.toArray());
+            log.info("Removed {} processed operations from Redis", processedKeys.size());
+        }
+    }
+
+    /**
+     * Permanently deletes comments that were soft‑deleted more than 7 days ago.
      *
      * <p>
      * This scheduled task performs a two‑phase cleanup:
@@ -266,10 +392,10 @@ public class CommentService {
      * projections and batch operations for maximum efficiency.
      * </p>
      */
-    @Scheduled(cron = "0 0 3 * * *") // every day at 3 AM
     @Transactional
+    @Scheduled(cron = "0 0 3 * * *") // every day at 3 AM
     public void purgeDeletedComments() {
-        Instant cutoff = Instant.now().minus(30, ChronoUnit.DAYS);
+        Instant cutoff = Instant.now().minus(7, ChronoUnit.DAYS);
 
         List<CommentProjection> comments = commentRepository.findExpiredComments(cutoff);
 
@@ -298,5 +424,4 @@ public class CommentService {
         log.info("Purged {} comments and {} files older than {}",
                 commentIds.size(), fileIds.size(), cutoff);
     }
-
 }
