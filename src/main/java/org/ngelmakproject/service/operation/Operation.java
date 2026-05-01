@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -22,12 +23,16 @@ public class Operation<T> implements Serializable {
         CREATE, UPDATE, DELETE, DEFAULT
     }
 
-    private final String id;  // Always store as String internally
+    @JsonProperty
+    private final String id;
+    @JsonProperty
     private final OperationType type;
+    @JsonProperty
     private final T data;
 
     /**
-     * Creates an operation with an auto-generated unique ID (long-based with counter).
+     * Creates an operation with an auto-generated unique ID (long-based with
+     * counter).
      */
     public Operation(OperationType type, T data) {
         this(Instant.now().toEpochMilli(), type, data);
@@ -215,8 +220,10 @@ public class Operation<T> implements Serializable {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         Operation<?> operation = (Operation<?>) o;
         return Objects.equals(id, operation.id);
     }
