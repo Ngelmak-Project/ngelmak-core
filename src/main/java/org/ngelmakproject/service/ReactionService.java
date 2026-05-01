@@ -61,16 +61,11 @@ public class ReactionService {
         log.debug("Request to save Reaction : {}", reaction);
         return channelService.findOneByCurrentUser().map(channel -> {
             reaction.setChannel(channel);
-            long uuid = Instant.now().getEpochSecond();
-            reaction.setId(uuid);
-            
-            Operation<Reaction> op = new Operation<>(
-                    uuid,
-                    OperationType.CREATE,
-                    reaction);
+            // Save to Redis
+            Operation<Reaction> op = Operation.createOperation(reaction);
+            reaction.setId(op.idAsLong()); // Set post ID from operation
             redisTemplate.opsForHash()
                     .put(REDIS_PENDING_KEY, op.id(), op.toJson());
-
             return reaction; // return immediately
         }).orElseThrow(ChannelNotFoundException::new);
     }
@@ -99,10 +94,8 @@ public class ReactionService {
 
             existing.setEmoji(reaction.getEmoji());
 
-            Operation<Reaction> op = new Operation<>(
-                    existing.getId(),
-                    OperationType.UPDATE,
-                    existing);
+            // Save to Redis
+            Operation<Reaction> op = Operation.updateOperation(existing.getId(), existing);
             redisTemplate.opsForHash()
                     .put(REDIS_PENDING_KEY, op.id(), op.toJson());
 
@@ -143,7 +136,7 @@ public class ReactionService {
         Map<Object, Object> pendingOps = redisTemplate.opsForHash().entries(REDIS_PENDING_KEY);
         for (Map.Entry<Object, Object> entry : pendingOps.entrySet()) {
             Operation<Reaction> op = Operation.fromJson((String) entry.getValue());
-            if (op.id() == id) {
+            if (op.idAsLong() == id) {
                 redisTemplate.opsForHash().delete(REDIS_PENDING_KEY, entry.getKey());
                 log.warn("Cancelled pending CREATE/UDATE for reaction {}", op.id());
                 return true;

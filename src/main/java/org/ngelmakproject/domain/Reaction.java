@@ -10,9 +10,18 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 @Entity
-@Table(name = "nk_reaction")
+@Table(
+    name = "nk_reaction",
+    uniqueConstraints = {
+        @UniqueConstraint(
+            name = "uk_reaction_post_channel",
+            columnNames = {"post_id", "channel_id"}
+        )
+    }
+)
 public class Reaction {
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sequenceGenerator")

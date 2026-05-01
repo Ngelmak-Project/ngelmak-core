@@ -118,12 +118,8 @@ public class PostService {
                             .files(new HashSet<>(files))
                             .channel(channel);
                     // Save to Redis
-                    long uuid = Instant.now().getEpochSecond();
-                    post.setId(uuid);
-                    Operation<Post> op = new Operation<>(
-                            uuid,
-                            OperationType.CREATE,
-                            post);
+                    Operation<Post> op = Operation.createOperation(post);
+                    post.setId(op.idAsLong()); // Set post ID from operation
                     redisTemplate.opsForHash()
                             .put(REDIS_PENDING_KEY, op.id(), op.toJson());
                     return post; // return immediately
@@ -177,10 +173,7 @@ public class PostService {
                     existing.setLastUpdate(Instant.now());
 
                     // Save to Redis
-                    Operation<Post> op = new Operation<>(
-                            existing.getId(),
-                            OperationType.UPDATE,
-                            existing);
+                    Operation<Post> op = Operation.updateOperation(existing.getId(), existing);
                     redisTemplate.opsForHash()
                             .put(REDIS_PENDING_KEY, op.id(), op.toJson());
 
@@ -219,8 +212,8 @@ public class PostService {
         // If the key is found then remove.
         Map<Object, Object> pendingOps = redisTemplate.opsForHash().entries(REDIS_PENDING_KEY);
         for (Map.Entry<Object, Object> entry : pendingOps.entrySet()) {
-            Operation<Reaction> op = Operation.fromJson((String) entry.getValue());
-            if (op.id() == id) {
+            Operation<Reaction> op = Operation.fromJson(entry.getValue());
+            if (op.idAsLong() == id) {
                 redisTemplate.opsForHash().delete(REDIS_PENDING_KEY, entry.getKey());
                 log.warn("Cancelled pending CREATE/UDATE for reaction {}", op.id());
                 return true;

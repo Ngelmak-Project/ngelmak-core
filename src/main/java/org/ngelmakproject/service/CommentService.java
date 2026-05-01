@@ -17,7 +17,6 @@ import org.ngelmakproject.domain.Reaction;
 import org.ngelmakproject.repository.CommentRepository;
 import org.ngelmakproject.repository.projection.CommentProjection;
 import org.ngelmakproject.service.operation.Operation;
-import org.ngelmakproject.service.operation.Operation.OperationType;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
 import org.ngelmakproject.web.rest.errors.ChannelNotFoundException;
 import org.ngelmakproject.web.rest.errors.ResourceNotFoundException;
@@ -117,16 +116,11 @@ public class CommentService {
                     ENTITY_NAME,
                     "missingPostOrComment");
         }
-        // Persist to redis
-        long uuid = Instant.now().getEpochSecond();
-        comment.setId(uuid);
-        Operation<Comment> op = new Operation<>(
-                uuid,
-                OperationType.CREATE,
-                comment);
+        // Save to Redis
+        Operation<Comment> op = Operation.createOperation(comment);
+        comment.setId(op.idAsLong()); // Set comment ID from operation
         redisTemplate.opsForHash()
                 .put(REDIS_PENDING_KEY, op.id(), op.toJson());
-
         return comment; // return immediately
     }
 
@@ -185,12 +179,8 @@ public class CommentService {
             deletedFile.ifPresent(file -> fileService.delete(List.of(file)));
             existing.setFile(newFiles.stream().findFirst().orElse(null));
         }
-
         // Save to Redis
-        Operation<Comment> op = new Operation<>(
-                existing.getId(),
-                OperationType.UPDATE,
-                existing);
+        Operation<Comment> op = Operation.updateOperation(existing.getId(), existing);
         redisTemplate.opsForHash()
                 .put(REDIS_PENDING_KEY, op.id(), op.toJson());
 
@@ -278,7 +268,7 @@ public class CommentService {
         Map<Object, Object> pendingOps = redisTemplate.opsForHash().entries(REDIS_PENDING_KEY);
         for (Map.Entry<Object, Object> entry : pendingOps.entrySet()) {
             Operation<Reaction> op = Operation.fromJson((String) entry.getValue());
-            if (op.id() == id) {
+            if (op.idAsLong() == id) {
                 redisTemplate.opsForHash().delete(REDIS_PENDING_KEY, entry.getKey());
                 log.warn("Cancelled pending CREATE/UDATE for reaction {}", op.id());
                 return true;
