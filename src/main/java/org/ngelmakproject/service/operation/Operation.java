@@ -17,9 +17,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class Operation<T> implements Serializable {
     private static final long serialVersionUID = 1L;
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final Object COUNTER_LOCK = new Object();
-    private static long LAST_TIMESTAMP = 0;
-    private static int COUNTER = 0;
 
     public enum OperationType {
         CREATE, UPDATE, DELETE, DEFAULT
@@ -28,13 +25,12 @@ public class Operation<T> implements Serializable {
     private final String id;  // Always store as String internally
     private final OperationType type;
     private final T data;
-    private final long createdAt;
 
     /**
      * Creates an operation with an auto-generated unique ID (long-based with counter).
      */
     public Operation(OperationType type, T data) {
-        this(generateUniqueId(), type, data);
+        this(Instant.now().toEpochMilli(), type, data);
     }
 
     /**
@@ -44,7 +40,6 @@ public class Operation<T> implements Serializable {
         this.id = String.valueOf(id);
         this.type = type;
         this.data = data;
-        this.createdAt = Instant.now().toEpochMilli();
     }
 
     /**
@@ -54,31 +49,6 @@ public class Operation<T> implements Serializable {
         this.id = Objects.requireNonNull(id, "ID cannot be null");
         this.type = type;
         this.data = data;
-        this.createdAt = Instant.now().toEpochMilli();
-    }
-
-    /**
-     * Generates a unique ID combining timestamp, counter, and random component.
-     * Format: [timestamp(13 digits)][counter(3 digits)][random(8 digits)]
-     * This ensures uniqueness even under high concurrency.
-     */
-    private static String generateUniqueId() {
-        synchronized (COUNTER_LOCK) {
-            long now = Instant.now().toEpochMilli();
-            
-            // Reset counter if we moved to a new millisecond
-            if (now > LAST_TIMESTAMP) {
-                LAST_TIMESTAMP = now;
-                COUNTER = 0;
-            } else {
-                COUNTER = (COUNTER + 1) % 1000; // 0-999
-            }
-            
-            // Add random component for distributed uniqueness
-            int random = (int) (Math.random() * 100000000); // 0-99999999
-            
-            return String.format("%d%03d%08d", now, COUNTER, random);
-        }
     }
 
     /**
@@ -208,10 +178,6 @@ public class Operation<T> implements Serializable {
         return data;
     }
 
-    public long createdAt() {
-        return createdAt;
-    }
-
     /**
      * Serializes the operation to JSON.
      */
@@ -265,7 +231,6 @@ public class Operation<T> implements Serializable {
         return "Operation{" +
                 "id='" + id + '\'' +
                 ", type=" + type +
-                ", createdAt=" + createdAt +
                 ", data=" + data +
                 '}';
     }
