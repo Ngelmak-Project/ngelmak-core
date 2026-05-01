@@ -38,14 +38,14 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	@Query("SELECT p FROM Post p WHERE p.deletedAt < :cutoff")
 	List<PostProjection> findExpiredPosts(Instant cutoff);
 
-	@Query("""
-			SELECT pf.file.id FROM
-			Post p
-			LEFT JOIN
-			FETCH p.files pf
-			WHERE p.deletedAt<:cutoff
-			""")
-	List<Long> findFileIdsForExpiredPosts(Instant cutoff);
+	// @Query("""
+	// 		SELECT pf.file.id FROM
+	// 		Post p
+	// 		LEFT JOIN
+	// 		FETCH p.files pf
+	// 		WHERE p.deletedAt<:cutoff
+	// 		""")
+	// List<Long> findFileIdsForExpiredPosts(Instant cutoff);
 
 	@Query(value = """
 			SELECT p.*,
