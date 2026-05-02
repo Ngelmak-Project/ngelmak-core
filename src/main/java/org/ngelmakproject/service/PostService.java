@@ -122,6 +122,7 @@ public class PostService {
                     post.setId(op.idAsLong()); // Set post ID from operation
                     redisTemplate.opsForHash()
                             .put(REDIS_PENDING_KEY, op.id(), op.toJson());
+                    log.info("Post saved to Redis - {}", op);
                     return post; // return immediately
                 })
                 .orElseThrow(ChannelNotFoundException::new);
@@ -176,6 +177,7 @@ public class PostService {
                     Operation<Post> op = Operation.updateOperation(existing.getId(), existing);
                     redisTemplate.opsForHash()
                             .put(REDIS_PENDING_KEY, op.id(), op.toJson());
+                    log.info("Post updated to Redis - {}", op);
 
                     // Delete removed files (irreversible)
                     fileService.delete(deletedMedias);
