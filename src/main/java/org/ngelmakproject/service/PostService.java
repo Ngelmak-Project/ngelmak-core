@@ -148,8 +148,8 @@ public class PostService {
                     // Apply updates
                     if (post.getKeywords() != null)
                         existing.setKeywords(post.getKeywords());
-                    if (post.getVisibility() != null)
-                        existing.setVisibility(post.getVisibility());
+                    if (post.getVisible() != null)
+                        existing.setVisible(post.getVisible());
                     if (post.getContent() != null)
                         existing.setContent(post.getContent());
                     if (post.getStatus() != null)
