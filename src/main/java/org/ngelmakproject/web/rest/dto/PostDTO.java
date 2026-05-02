@@ -12,12 +12,12 @@ public record PostDTO(
         String content,
         Instant at,
         Instant lastUpdate,
-        boolean visibility,
+        Boolean visibility,
         Status status,
         ChannelDTO channel,
         Set<FileDTO> files,
         ReactionSummaryDTO reactions,
-        int commentCount,
+        Integer commentCount,
         PostDTO replyTo) {
     public static PostDTO from(Post p, ReactionSummaryDTO reactions) {
         if (p == null)

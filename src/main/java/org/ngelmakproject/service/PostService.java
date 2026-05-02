@@ -104,6 +104,7 @@ public class PostService {
                     List<File> files = fileService.save(medias, covers);
                     // Prepare entity
                     post.status(Status.VALIDATED)
+                            .visible(post.getVisible() != null ? post.getVisible() : true)
                             .at(Instant.now())
                             .files(new HashSet<>(files))
                             .channel(channel);
