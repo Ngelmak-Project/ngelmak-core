@@ -268,7 +268,7 @@ public class CommentService {
         // If the key is found then remove.
         Map<Object, Object> pendingOps = redisTemplate.opsForHash().entries(REDIS_PENDING_KEY);
         for (Map.Entry<Object, Object> entry : pendingOps.entrySet()) {
-            Operation<Reaction> op = Operation.fromJson((String) entry.getValue());
+            Operation<Reaction> op = Operation.fromJson(entry.getValue(), Reaction.class);
             if (op.idAsLong() == id) {
                 redisTemplate.opsForHash().delete(REDIS_PENDING_KEY, entry.getKey());
                 log.warn("Cancelled pending CREATE/UDATE for reaction {}", op.id());
@@ -300,7 +300,7 @@ public class CommentService {
 
         // Aggregate and apply updates in one operation
         entries.values().stream()
-                .map(json -> Operation.<ReplyCountDTO>fromJson(json).data())
+                .map(json -> Operation.fromJson(json, ReplyCountDTO.class).data())
                 .collect(Collectors.toMap(
                         ReplyCountDTO::id,
                         ReplyCountDTO::count,
@@ -334,7 +334,7 @@ public class CommentService {
         for (Map.Entry<Object, Object> entry : entries.entrySet()) {
             Object key = entry.getKey();
             String json = (String) entry.getValue();
-            Operation<Comment> op = Operation.fromJson(json);
+            Operation<Comment> op = Operation.fromJson(json, Comment.class);
             switch (op.type()) {
                 case CREATE -> {
                     op.data().setId(null); // Clear ID for new comments

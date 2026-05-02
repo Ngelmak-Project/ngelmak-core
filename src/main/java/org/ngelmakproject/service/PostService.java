@@ -122,7 +122,7 @@ public class PostService {
                     post.setId(op.idAsLong()); // Set post ID from operation
                     redisTemplate.opsForHash()
                             .put(REDIS_PENDING_KEY, op.id(), op.toJson());
-                    log.info("Post saved to Redis - {}", op);
+                    log.info("📦 Redis | Post saved - {}", op);
                     return post; // return immediately
                 })
                 .orElseThrow(ChannelNotFoundException::new);
@@ -177,7 +177,7 @@ public class PostService {
                     Operation<Post> op = Operation.updateOperation(existing.getId(), existing);
                     redisTemplate.opsForHash()
                             .put(REDIS_PENDING_KEY, op.id(), op.toJson());
-                    log.info("Post updated to Redis - {}", op);
+                    log.info("📦 Redis | Post updated - {}", op);
 
                     // Delete removed files (irreversible)
                     fileService.delete(deletedMedias);
@@ -214,7 +214,7 @@ public class PostService {
         // If the key is found then remove.
         Map<Object, Object> pendingOps = redisTemplate.opsForHash().entries(REDIS_PENDING_KEY);
         for (Map.Entry<Object, Object> entry : pendingOps.entrySet()) {
-            Operation<Reaction> op = Operation.fromJson(entry.getValue());
+            Operation<Reaction> op = Operation.fromJson(entry.getValue(), Reaction.class);
             if (op.idAsLong() == id) {
                 redisTemplate.opsForHash().delete(REDIS_PENDING_KEY, entry.getKey());
                 log.warn("Cancelled pending CREATE/UDATE for reaction {}", op.id());
@@ -258,6 +258,7 @@ public class PostService {
             Operation<Long> deleteOp = Operation.deleteOperation(id);
             redisTemplate.opsForHash()
                     .put(REDIS_PENDING_KEY, deleteOp.id(), deleteOp.toJson());
+            log.warn("📦 Redis | Post deleted - {}", deleteOp);
         });
     }
 
@@ -727,7 +728,7 @@ public class PostService {
                     return op.toJson();
                 });
 
-        Operation<Trending> op = Operation.fromJson(json);
+        Operation<Trending> op = Operation.fromJson(json, Trending.class);
         log.debug("🦋 Cache hit for trending : {}", op.data());
         return op.data();
     }
@@ -742,7 +743,7 @@ public class PostService {
      * </p>
      */
     @Scheduled(fixedDelay = 2, timeUnit = TimeUnit.MINUTES)
-    public void flushReplyCount() {
+    public void flushCommentCount() {
         Map<Object, Object> entries = redisTemplate.opsForHash()
                 .entries(REDIS_PENDING_REPLY_COUNT_KEY);
 
@@ -750,11 +751,11 @@ public class PostService {
             return;
         }
 
-        log.info("Flushing {} pending reply count operations", entries.size());
+        log.info("Flushing {} pending comment count operations", entries.size());
 
         // Aggregate and apply updates in one operation
         entries.values().stream()
-                .map(json -> Operation.<ReplyCountDTO>fromJson(json).data())
+                .map(json -> Operation.fromJson(json, ReplyCountDTO.class).data())
                 .collect(Collectors.toMap(
                         ReplyCountDTO::id,
                         ReplyCountDTO::count,
@@ -780,7 +781,7 @@ public class PostService {
             return;
         }
 
-        log.info("Flushing {} pending reaction operations", entries.size());
+        log.info("Flushing {} pending post operations", entries.size());
 
         List<Post> toSave = new ArrayList<>();
         List<Post> newlyCreated = new ArrayList<>();
@@ -789,7 +790,7 @@ public class PostService {
         for (Map.Entry<Object, Object> entry : entries.entrySet()) {
             Object key = entry.getKey();
             String json = (String) entry.getValue();
-            Operation<Post> op = Operation.fromJson(json);
+            Operation<Post> op = Operation.fromJson(json, Post.class);
             switch (op.type()) {
                 case CREATE -> {
                     op.data().setId(null); // Clear ID for new comments

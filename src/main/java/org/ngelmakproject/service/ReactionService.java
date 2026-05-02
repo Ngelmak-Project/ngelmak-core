@@ -135,7 +135,7 @@ public class ReactionService {
         // If the key is found then remove.
         Map<Object, Object> pendingOps = redisTemplate.opsForHash().entries(REDIS_PENDING_KEY);
         for (Map.Entry<Object, Object> entry : pendingOps.entrySet()) {
-            Operation<Reaction> op = Operation.fromJson((String) entry.getValue());
+            Operation<Reaction> op = Operation.fromJson(entry.getValue(), Reaction.class);
             if (op.idAsLong() == id) {
                 redisTemplate.opsForHash().delete(REDIS_PENDING_KEY, entry.getKey());
                 log.warn("Cancelled pending CREATE/UDATE for reaction {}", op.id());
@@ -169,7 +169,7 @@ public class ReactionService {
         for (Map.Entry<Object, Object> entry : entries.entrySet()) {
             Object key = entry.getKey();
             String json = (String) entry.getValue();
-            Operation<Reaction> op = Operation.fromJson(json);
+            Operation<Reaction> op = Operation.fromJson(json, Reaction.class);
             switch (op.type()) {
                 case CREATE -> {
                     op.data().setId(null); // Clear ID for new comments

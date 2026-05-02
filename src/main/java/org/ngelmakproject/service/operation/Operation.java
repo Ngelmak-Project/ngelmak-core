@@ -5,8 +5,9 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -35,6 +36,19 @@ public class Operation<T> implements Serializable {
     private final T data;
 
     /**
+     * Creates an operation with a String ID.
+     */
+    @JsonCreator
+    public Operation(
+            @JsonProperty("id") String id,
+            @JsonProperty("type") OperationType type,
+            @JsonProperty("data") T data) {
+        this.id = id;
+        this.type = type;
+        this.data = data;
+    }
+
+    /**
      * Creates an operation with an auto-generated unique ID (long-based with
      * counter).
      */
@@ -47,15 +61,6 @@ public class Operation<T> implements Serializable {
      */
     public Operation(long id, OperationType type, T data) {
         this.id = String.valueOf(id);
-        this.type = type;
-        this.data = data;
-    }
-
-    /**
-     * Creates an operation with a String ID.
-     */
-    public Operation(String id, OperationType type, T data) {
-        this.id = Objects.requireNonNull(id, "ID cannot be null");
         this.type = type;
         this.data = data;
     }
@@ -201,22 +206,12 @@ public class Operation<T> implements Serializable {
     /**
      * Deserializes an operation from JSON.
      */
-    public static <T> Operation<T> fromJson(String json) {
+    public static <T> Operation<T> fromJson(Object json, Class<T> dataClass) {
         try {
-            return MAPPER.readValue(json, new TypeReference<Operation<T>>() {
-            });
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to deserialize Operation", e);
-        }
-    }
+            JavaType type = MAPPER.getTypeFactory()
+                    .constructParametricType(Operation.class, dataClass);
 
-    /**
-     * Deserializes an operation from an object (typically from Redis).
-     */
-    public static <T> Operation<T> fromJson(Object object) {
-        try {
-            return MAPPER.readValue((String) object, new TypeReference<Operation<T>>() {
-            });
+            return MAPPER.readValue((String) json, type);
         } catch (Exception e) {
             throw new RuntimeException("Failed to deserialize Operation", e);
         }
