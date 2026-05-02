@@ -55,7 +55,6 @@ public class Post implements Serializable {
     @Column(name = "last_update")
     private Instant lastUpdate;
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "visible")
     private Boolean visible = true;
 
