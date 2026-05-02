@@ -126,30 +126,49 @@ public class PostRedisService {
     @Scheduled(fixedDelay = 2, timeUnit = TimeUnit.SECONDS)
     public void flushPendingPosts() {
         List<Post> toSave = new ArrayList<>();
+
+        // Process created posts
         Set<Object> createdKeys = redis.opsForHash().keys(REDIS_CREATE_KEY);
         for (Object key : createdKeys) {
             String json = (String) redis.opsForHash().get(REDIS_CREATE_KEY, key);
             Post newPost = CacheTools.fromJson(json, Post.class);
             newPost.setId(null);
             toSave.add(newPost);
-            log.info("Saved {} post(s)", createdKeys.size());
         }
+
+        // Process updated posts
         Set<Object> updatedKeys = redis.opsForHash().keys(REDIS_UPDATE_KEY);
         for (Object key : updatedKeys) {
             String json = (String) redis.opsForHash().get(REDIS_UPDATE_KEY, key);
             toSave.add(CacheTools.fromJson(json, Post.class));
-            log.info("Updated {} post(s)", updatedKeys.size());
         }
+        if (!updatedKeys.isEmpty()) {
+            log.info("Processing {} updated post(s)", updatedKeys.size());
+        }
+
+        // Return early if nothing to save
         if (toSave.isEmpty()) {
+            log.debug("No pending posts to flush");
             return;
         }
 
-        postRepository.saveAll(toSave);
-        if (!createdKeys.isEmpty())
-            redis.opsForHash().delete(REDIS_CREATE_KEY, createdKeys);
-        if (!updatedKeys.isEmpty())
-        redis.opsForHash().delete(REDIS_UPDATE_KEY, updatedKeys);
-        log.info("Flushing {} pending post operations", toSave.size());
+        // Save all and clean up Redis
+        try {
+            postRepository.saveAll(toSave);
+            // Clean up Redis only after successful save
+            if (!createdKeys.isEmpty()) {
+                redis.opsForHash().delete(REDIS_CREATE_KEY, createdKeys.toArray());
+            }
+            if (!updatedKeys.isEmpty()) {
+                redis.opsForHash().delete(REDIS_UPDATE_KEY, updatedKeys.toArray());
+            }
+            log.info("Successfully flushed {} pending post(s) to database", toSave.size());
+        } catch (Exception e) {
+            log.error("Failed to flush {} pending post(s)", toSave.size(), e);
+            throw e; // Re-throw since method is @Transactional
+        }
+
+        log.info("Successfully flushed {} pending post(s) to database", toSave.size());
     }
 
     /**
@@ -169,7 +188,7 @@ public class PostRedisService {
             toDelete.add(id);
         }
         postRepository.deleteAllById(toDelete);
-        redis.opsForHash().delete(REDIS_DELETE_KEY, processedKeys);
+        redis.opsForHash().delete(REDIS_DELETE_KEY, processedKeys.toArray());
         log.info("Removed {} processed operations from Redis", processedKeys.size());
     }
 
@@ -204,6 +223,6 @@ public class PostRedisService {
                 .forEach(postRepository::updatePostCommentCount);
 
         // Clear processed entries
-        redis.opsForHash().delete(REDIS_REPLY_COUNT_KEY, processedKeys);
+        redis.opsForHash().delete(REDIS_REPLY_COUNT_KEY, processedKeys.toArray());
     }
 }
