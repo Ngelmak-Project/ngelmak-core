@@ -121,6 +121,7 @@ public class CommentService {
         comment.setId(op.idAsLong()); // Set comment ID from operation
         redisTemplate.opsForHash()
                 .put(REDIS_PENDING_KEY, op.id(), op.toJson());
+        log.info("Saved Post creation to Redis - data: {}", op.toJson());
         return comment; // return immediately
     }
 
