@@ -36,7 +36,7 @@ public class ChannelRedisService {
         String json = redis.opsForValue().get(key);
         if (json != null) {
             var cached = CacheTools.fromJson(json, Channel.class);
-            log.debug("📦 Redis | Cache hit for user's Channel : {}", cached);
+            log.info("📦 Redis | Cache hit for user's Channel : {}", cached);
             return Optional.of(cached);
         }
 
