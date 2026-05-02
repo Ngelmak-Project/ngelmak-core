@@ -6,14 +6,13 @@ import java.util.stream.Collectors;
 
 import org.ngelmakproject.domain.Post;
 import org.ngelmakproject.domain.Post.Status;
-import org.ngelmakproject.domain.Post.Visibility;
 
 public record PostDTO(
         Long id,
         String content,
         Instant at,
         Instant lastUpdate,
-        Visibility visibility,
+        boolean visibility,
         Status status,
         ChannelDTO channel,
         Set<FileDTO> files,
@@ -28,7 +27,7 @@ public record PostDTO(
                 p.getContent(),
                 p.getAt(),
                 p.getLastUpdate(),
-                p.getVisibility(),
+                p.getVisible(),
                 p.getStatus(),
                 ChannelDTO.from(p.getChannel()),
                 p.getFiles().stream().map(FileDTO::from).collect(Collectors.toSet()),

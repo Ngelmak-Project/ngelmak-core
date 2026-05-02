@@ -56,8 +56,8 @@ public class Post implements Serializable {
     private Instant lastUpdate;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "visibility")
-    private Visibility visibility;
+    @Column(name = "visible")
+    private Boolean visible = true;
 
     @Column(name = "content", columnDefinition = "TEXT", nullable = false)
     @Size(max = 10000)
@@ -96,14 +96,6 @@ public class Post implements Serializable {
         SUSPENDED,
         DELETING,
         NOT_QUALIFIED,
-    }
-
-    /**
-     * The Visibility enumeration.
-     */
-    public enum Visibility {
-        PUBLIC,
-        PRIVATE,
     }
 
     /**
@@ -182,17 +174,17 @@ public class Post implements Serializable {
         this.lastUpdate = lastUpdate;
     }
 
-    public Visibility getVisibility() {
-        return this.visibility;
+    public Boolean getVisible() {
+        return this.visible;
     }
 
-    public Post visibility(Visibility visibility) {
-        this.setVisibility(visibility);
+    public Post visible(Boolean visible) {
+        this.setVisible(visible);
         return this;
     }
 
-    public void setVisibility(Visibility visibility) {
-        this.visibility = visibility;
+    public void setVisible(Boolean visible) {
+        this.visible = visible;
     }
 
     public String getContent() {
@@ -299,7 +291,7 @@ public class Post implements Serializable {
                 ", keywords='" + getKeywords() + "'" +
                 ", at='" + getAt() + "'" +
                 ", lastUpdate='" + getLastUpdate() + "'" +
-                ", visibility='" + getVisibility() + "'" +
+                ", visible='" + getVisible() + "'" +
                 ", content='" + getContent() + "'" +
                 ", status='" + getStatus() + "'" +
                 "}";
