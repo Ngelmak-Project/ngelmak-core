@@ -145,7 +145,9 @@ public class PostRedisService {
         }
 
         postRepository.saveAll(toSave);
-        redis.opsForHash().delete(REDIS_CREATE_KEY, createdKeys);
+        if (!createdKeys.isEmpty())
+            redis.opsForHash().delete(REDIS_CREATE_KEY, createdKeys);
+        if (!updatedKeys.isEmpty())
         redis.opsForHash().delete(REDIS_UPDATE_KEY, updatedKeys);
         log.info("Flushing {} pending post operations", toSave.size());
     }
