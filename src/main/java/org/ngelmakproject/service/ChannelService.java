@@ -10,9 +10,8 @@ import org.ngelmakproject.domain.Channel;
 import org.ngelmakproject.domain.Subscription;
 import org.ngelmakproject.repository.ChannelRepository;
 import org.ngelmakproject.repository.SubscriptionRepository;
-import org.ngelmakproject.repository.projection.ActiveChannelProjection;
 import org.ngelmakproject.security.UserService;
-import org.ngelmakproject.security.UserService.UserPrincipal;
+import org.ngelmakproject.service.cache.ChannelRedisService;
 import org.ngelmakproject.web.rest.dto.ActiveChannel;
 import org.ngelmakproject.web.rest.dto.ChannelDTO;
 import org.ngelmakproject.web.rest.dto.SubscriptionDTO;
@@ -42,12 +41,16 @@ public class ChannelService {
     private final ChannelRepository channelRepository;
     private final SubscriptionRepository subscriptionRepository;
     private final FileService fileService;
+    private final ChannelRedisService channelRedisService;
 
-    public ChannelService(ChannelRepository channelRepository, SubscriptionRepository subscriptionRepository,
-            FileService fileService) {
+    public ChannelService(ChannelRepository channelRepository,
+            SubscriptionRepository subscriptionRepository,
+            FileService fileService,
+            ChannelRedisService channelRedisService) {
         this.channelRepository = channelRepository;
         this.subscriptionRepository = subscriptionRepository;
         this.fileService = fileService;
+        this.channelRedisService = channelRedisService;
     }
 
     /**
@@ -78,7 +81,8 @@ public class ChannelService {
         // Generate identifier + metadata
         channel.setIdentifier(generateUniqueIdentifier(channel.getName()));
         channel.setCreatedAt(Instant.now());
-
+        // Save the channel to Redis.
+        channelRedisService.updateCurrentUserChannel(channel);
         return channelRepository.save(channel);
     }
 
@@ -96,24 +100,26 @@ public class ChannelService {
     public Channel update(Channel channel) {
         log.debug("Request to update Channel : {}", channel);
         return findOneByCurrentUser()
-                .map(existingChannel -> {
+                .map(existing -> {
                     // Name changed → regenerate identifier
                     if (channel.getName() != null &&
-                            !channel.getName().equals(existingChannel.getName())) {
-                        existingChannel.setName(channel.getName());
-                        existingChannel.setIdentifier(generateUniqueIdentifier(channel.getName()));
+                            !channel.getName().equals(existing.getName())) {
+                        existing.setName(channel.getName());
+                        existing.setIdentifier(generateUniqueIdentifier(channel.getName()));
                     }
                     if (channel.getAvatar() != null)
-                        existingChannel.setAvatar(channel.getAvatar());
+                        existing.setAvatar(channel.getAvatar());
                     if (channel.getBanner() != null)
-                        existingChannel.setBanner(channel.getBanner());
+                        existing.setBanner(channel.getBanner());
                     if (channel.getCreatedAt() != null)
-                        existingChannel.setCreatedAt(channel.getCreatedAt());
+                        existing.setCreatedAt(channel.getCreatedAt());
                     if (channel.getDescription() != null)
-                        existingChannel.setDescription(channel.getDescription());
-                    return existingChannel;
+                        existing.setDescription(channel.getDescription());
+                    channelRepository.save(existing);
+                    // Save updated info into Redis.
+                    channelRedisService.updateCurrentUserChannel(existing);
+                    return existing;
                 })
-                .map(channelRepository::save)
                 .orElseThrow(ChannelNotFoundException::new);
     }
 
@@ -146,7 +152,7 @@ public class ChannelService {
      * @param name the channel name to convert into a unique identifier
      * @return a unique, normalized slug
      */
-    public String generateUniqueIdentifier(String name) {
+    private String generateUniqueIdentifier(String name) {
         // Normalize accents (é → e, ç → c, ü → u)
         String normalized = Normalizer.normalize(name, Normalizer.Form.NFD)
                 .replaceAll("\\p{M}", ""); // remove diacritics
@@ -221,41 +227,34 @@ public class ChannelService {
      * {@link ClassCastException} or {@link NullPointerException}.
      * </p>
      * 
-     * [TODO] Save the channel if exists into cache.
-     *
-     * @return an {@code Optional<Channel>} for the authenticated user, or empty
-     *         if
+     * @return an {@code Optional<Channel>} for the authenticated user, or empty if
      *         no valid authenticated user is present.
      */
     @Transactional(readOnly = true)
     public Optional<ChannelDTO> findChannelDetails() {
-        return UserService.getAuthenticatedUser().map(UserPrincipal::id)
-                .flatMap(id -> channelRepository.findOneByUser(id).map(channel -> {
-                    var stats = getSubscriptionStatistics(channel.getId());
-                    return ChannelDTO.from(channel, stats);
-                }));
+        return this.findOneByCurrentUser().map(channel -> {
+            var stats = getSubscriptionStatistics(channel.getId());
+            return ChannelDTO.from(channel, stats);
+        });
     }
 
     /**
-     * Retrieves the Channel associated with the currently authenticated user.
+     * Retrieves the Channel of the currently authenticated user, using Redis cache
+     * when available and falling back to the database when necessary.
      *
      * <p>
-     * This method is designed to be safe even when invoked in contexts where
-     * authentication is not guaranteed (e.g., unsecured endpoints). It performs
-     * several defensive checks to avoid runtime exceptions such as
-     * {@link ClassCastException} or {@link NullPointerException}.
+     * This method is safe to call even when no authenticated user is present.
+     * It performs defensive checks and returns an empty {@code Optional} when
+     * authentication is missing or no Channel exists for the user.
      * </p>
      *
-     * @return an {@code Optional<Channel>} for the authenticated user, or empty
-     *         if
-     *         no valid authenticated user is present.
+     * @return an {@code Optional<Channel>} for the authenticated user, or empty if
+     *         no valid user or Channel is available
      */
     @Transactional(readOnly = true)
     public Optional<Channel> findOneByCurrentUser() {
-        return UserService.getAuthenticatedUser().map(user -> {
-            // [TODO] Save the channel if exists into cache.
-            return channelRepository.findOneByUser(user.id());
-        }).orElse(Optional.empty());
+        return UserService.getAuthenticatedUser()
+                .flatMap(user -> channelRedisService.getOrLoadCurrentUserChannel(user.id()));
     }
 
     /**
@@ -293,6 +292,8 @@ public class ChannelService {
                         fileService.deleteByUrls(List.of(deletedAvatarUrl));
                     }
                     log.debug("Changed Information for Channel: {}", channel);
+                    // Update current user info to Redis.
+                    channelRedisService.updateCurrentUserChannel(channel);
                     return channel;
                 }).orElseThrow(ChannelNotFoundException::new);
     }
@@ -321,6 +322,8 @@ public class ChannelService {
                     if (deletedBannerUrl != null && !deletedBannerUrl.isEmpty())
                         fileService.deleteByUrls(List.of(deletedBannerUrl));
                     log.debug("Changed information for Channel: {}", channel);
+                    // Update current user info to Redis.
+                    channelRedisService.updateCurrentUserChannel(channel);
                     return channel;
                 }).orElseThrow(ChannelNotFoundException::new);
     }

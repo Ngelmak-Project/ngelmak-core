@@ -2,6 +2,7 @@ package org.ngelmakproject.repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.ngelmakproject.domain.Reaction;
 import org.ngelmakproject.domain.Reaction;
@@ -20,4 +21,7 @@ public interface ReactionRepository extends JpaRepository<Reaction, Long> {
 
   @Query("SELECT r FROM Reaction r WHERE r.post.id IN :postIds and r.channel.id IN :channelIds")
   List<Reaction> findByPostInAndChannelIn(List<Long> postIds, List<Long> channelIds);
+
+  @Query("DELETE FROM Reaction r WHERE r.id IN :ids AND r.channel.id IN :channelIds")
+  void deleteByIdInAndChannelIn(Set<Long> ids, Set<Long> channelIds);
 }

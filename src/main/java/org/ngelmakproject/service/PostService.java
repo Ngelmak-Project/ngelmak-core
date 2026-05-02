@@ -8,8 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.ngelmakproject.config.Constants;
@@ -24,8 +22,7 @@ import org.ngelmakproject.repository.PostRepository;
 import org.ngelmakproject.repository.ReactionRepository;
 import org.ngelmakproject.repository.SubscriptionRepository;
 import org.ngelmakproject.repository.projection.PostProjection;
-import org.ngelmakproject.service.operation.Operation;
-import org.ngelmakproject.service.operation.Operation.OperationType;
+import org.ngelmakproject.service.cache.PostRedisService;
 import org.ngelmakproject.web.rest.dto.ActiveChannel;
 import org.ngelmakproject.web.rest.dto.FeedDTO;
 import org.ngelmakproject.web.rest.dto.FeedPageDTO;
@@ -45,7 +42,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,13 +56,7 @@ public class PostService {
 
     private static final Logger log = LoggerFactory.getLogger(PostService.class);
 
-    private record ReplyCountDTO(long id, int count) {
-    }
-
     private static final String ENTITY_NAME = "post";
-    private static final String REDIS_TRENDING_KEY = "post:trending";
-    private static final String REDIS_PENDING_KEY = "post:pending";
-    private static final String REDIS_PENDING_REPLY_COUNT_KEY = "post:pending:replycount";
     private final Instant windowStart = Instant.now().minus(50 * 365, ChronoUnit.DAYS);
 
     private final PostRepository postRepository;
@@ -75,7 +65,7 @@ public class PostService {
     private final ReactionRepository reactionRepository;
     private final FeedRepository feedRepository;
     private final SubscriptionRepository subscriptionRepository;
-    private final RedisTemplate<String, String> redisTemplate;
+    private final PostRedisService postRedisService;
 
     PostService(PostRepository postRepository,
             FileService fileService,
@@ -83,14 +73,14 @@ public class PostService {
             ChannelService channelService,
             FeedRepository feedRepository,
             SubscriptionRepository subscriptionRepository,
-            RedisTemplate<String, String> redisTemplate) {
+            PostRedisService postRedisService) {
         this.postRepository = postRepository;
         this.reactionRepository = reactionRepository;
         this.feedRepository = feedRepository;
         this.fileService = fileService;
         this.subscriptionRepository = subscriptionRepository;
         this.channelService = channelService;
-        this.redisTemplate = redisTemplate;
+        this.postRedisService = postRedisService;
     }
 
     /**
@@ -118,11 +108,7 @@ public class PostService {
                             .files(new HashSet<>(files))
                             .channel(channel);
                     // Save to Redis
-                    Operation<Post> op = Operation.createOperation(post);
-                    post.setId(op.idAsLong()); // Set post ID from operation
-                    redisTemplate.opsForHash()
-                            .put(REDIS_PENDING_KEY, op.id(), op.toJson());
-                    log.info("📦 Redis | Post saved - {}", op);
+                    postRedisService.queueCreate(post);
                     return post; // return immediately
                 })
                 .orElseThrow(ChannelNotFoundException::new);
@@ -156,9 +142,6 @@ public class PostService {
                                 channel.getUser(), existing.getId(), ENTITY_NAME);
                     }
 
-                    // If the key is found then remove.
-                    removeRedisById(existing.getId());
-
                     // Save new files
                     List<File> newFiles = fileService.save(medias, covers);
                     existing.getFiles().addAll(newFiles);
@@ -174,10 +157,7 @@ public class PostService {
                     existing.setLastUpdate(Instant.now());
 
                     // Save to Redis
-                    Operation<Post> op = Operation.updateOperation(existing.getId(), existing);
-                    redisTemplate.opsForHash()
-                            .put(REDIS_PENDING_KEY, op.id(), op.toJson());
-                    log.info("📦 Redis | Post updated - {}", op);
+                    postRedisService.queueUpdate(post);
 
                     // Delete removed files (irreversible)
                     fileService.delete(deletedMedias);
@@ -208,20 +188,6 @@ public class PostService {
                     ENTITY_NAME,
                     "contentTooLong");
         }
-    }
-
-    private boolean removeRedisById(long id) {
-        // If the key is found then remove.
-        Map<Object, Object> pendingOps = redisTemplate.opsForHash().entries(REDIS_PENDING_KEY);
-        for (Map.Entry<Object, Object> entry : pendingOps.entrySet()) {
-            Operation<Reaction> op = Operation.fromJson(entry.getValue(), Reaction.class);
-            if (op.idAsLong() == id) {
-                redisTemplate.opsForHash().delete(REDIS_PENDING_KEY, entry.getKey());
-                log.warn("Cancelled pending CREATE/UDATE for reaction {}", op.id());
-                return true;
-            }
-        }
-        return false;
     }
 
     /**
@@ -255,10 +221,7 @@ public class PostService {
             }
 
             // No pending CREATE found → queue a DELETE operation
-            Operation<Long> deleteOp = Operation.deleteOperation(id);
-            redisTemplate.opsForHash()
-                    .put(REDIS_PENDING_KEY, deleteOp.id(), deleteOp.toJson());
-            log.warn("📦 Redis | Post deleted - {}", deleteOp);
+            postRedisService.queueDelete(id);
         });
     }
 
@@ -301,10 +264,7 @@ public class PostService {
      */
     public void updateCommmentCount(Long postId, Integer count) {
         // Record to redis for updating reply count.
-        Operation<ReplyCountDTO> defaultOp = Operation
-                .defaultOperation(new ReplyCountDTO(postId, count));
-        redisTemplate.opsForHash()
-                .put(REDIS_PENDING_REPLY_COUNT_KEY, defaultOp.id(), defaultOp.toJson());
+        postRedisService.queueCommmentCount(postId, count);
     }
 
     /**
@@ -681,152 +641,54 @@ public class PostService {
      *         summaries.
      */
     public Trending getTrending() {
-        log.debug("Trending...");
-        String json = Optional.ofNullable(
-                redisTemplate.opsForValue().get(REDIS_TRENDING_KEY)).orElseGet(() -> {
-                    log.debug("🦋 Cache miss for trending, fetching from database");
+        Trending trending = postRedisService.getTrending().orElseGet(() -> {
+            log.warn("🦋 Cache miss for trending, fetching from database");
 
-                    List<Post> mostCommentedPosts = postRepository.mostCommentedPosts(
-                            Instant.now().minus(30, ChronoUnit.DAYS),
-                            PageRequest.of(0, 5));
-                    List<Post> trendingPosts = postRepository.trendingPosts(
-                            Instant.now().minus(30, ChronoUnit.DAYS),
-                            PageRequest.of(0, 5));
+            List<Post> mostCommentedPosts = postRepository.mostCommentedPosts(
+                    Instant.now().minus(30, ChronoUnit.DAYS),
+                    PageRequest.of(0, 5));
+            List<Post> trendingPosts = postRepository.trendingPosts(
+                    Instant.now().minus(30, ChronoUnit.DAYS),
+                    PageRequest.of(0, 5));
 
-                    // Extract post IDs from both lists
-                    List<Long> postIds = Stream.concat(
-                            mostCommentedPosts.stream().map(Post::getId),
-                            trendingPosts.stream().map(Post::getId)).toList();
+            // Extract post IDs from both lists
+            List<Long> postIds = Stream.concat(
+                    mostCommentedPosts.stream().map(Post::getId),
+                    trendingPosts.stream().map(Post::getId)).toList();
 
-                    // Single bulk fetch for all reactions
-                    List<Reaction> reactions = reactionRepository.findByPostIds(postIds);
-                    Map<Long, List<Reaction>> reactionsByPost = ReactionService.groupReactionsByPost(reactions);
+            // Single bulk fetch for all reactions
+            List<Reaction> reactions = reactionRepository.findByPostIds(postIds);
+            Map<Long, List<Reaction>> reactionsByPost = ReactionService.groupReactionsByPost(reactions);
 
-                    // Map both lists to DTOs
-                    List<PostDTO> mostCommentedPostDTOs = mostCommentedPosts.stream()
-                            .map(post -> {
-                                List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
-                                ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions, null);
-                                return PostDTO.from(post, summary);
-                            })
-                            .toList();
+            // Map both lists to DTOs
+            List<PostDTO> mostCommentedPostDTOs = mostCommentedPosts.stream()
+                    .map(post -> {
+                        List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
+                        ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions, null);
+                        return PostDTO.from(post, summary);
+                    })
+                    .toList();
 
-                    List<PostDTO> trendingPostDTOs = trendingPosts.stream()
-                            .map(post -> {
-                                List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
-                                ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions, null);
-                                return PostDTO.from(post, summary);
-                            })
-                            .toList();
+            List<PostDTO> trendingPostDTOs = trendingPosts.stream()
+                    .map(post -> {
+                        List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
+                        ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions, null);
+                        return PostDTO.from(post, summary);
+                    })
+                    .toList();
 
-                    List<ActiveChannel> topActiveChannels = channelService.getActiveChannels();
+            List<ActiveChannel> topActiveChannels = channelService.getActiveChannels();
 
-                    Trending t = new Trending(topActiveChannels, trendingPostDTOs, mostCommentedPostDTOs);
+            Trending t = new Trending(topActiveChannels, trendingPostDTOs, mostCommentedPostDTOs);
 
-                    Operation<Trending> op = new Operation<>(0, OperationType.DEFAULT, t);
+            // Save to Redis.
+            postRedisService.setTrending(t);
 
-                    return op.toJson();
-                });
+            return t;
+        });
 
-        Operation<Trending> op = Operation.fromJson(json, Trending.class);
-        log.debug("🦋 Cache hit for trending : {}", op.data());
-        return op.data();
-    }
-
-    /**
-     * Periodically flushes aggregated reply count updates from Redis to the
-     * database.
-     * 
-     * <p>
-     * Runs every 2 minutes, retrieving pending operations from Redis, aggregating
-     * count changes by comment ID, and applying batch updates to the database.
-     * </p>
-     */
-    @Scheduled(fixedDelay = 2, timeUnit = TimeUnit.MINUTES)
-    public void flushCommentCount() {
-        Map<Object, Object> entries = redisTemplate.opsForHash()
-                .entries(REDIS_PENDING_REPLY_COUNT_KEY);
-
-        if (entries.isEmpty()) {
-            return;
-        }
-
-        log.info("Flushing {} pending comment count operations", entries.size());
-
-        // Aggregate and apply updates in one operation
-        entries.values().stream()
-                .map(json -> Operation.fromJson(json, ReplyCountDTO.class).data())
-                .collect(Collectors.toMap(
-                        ReplyCountDTO::id,
-                        ReplyCountDTO::count,
-                        Integer::sum))
-                .forEach(postRepository::updatePostCommentCount);
-
-        // Clear processed entries
-        redisTemplate.opsForHash().delete(REDIS_PENDING_REPLY_COUNT_KEY, entries.keySet());
-    }
-
-    /**
-     * Flushes pending Post operations from Redis to the database.
-     * Processes CREATE, UPDATE, and DELETE operations in batches.
-     * Scheduled every 30 seconds.
-     */
-    @Transactional
-    @Scheduled(fixedDelay = 30, timeUnit = TimeUnit.SECONDS)
-    public void flushPendingPosts() {
-        Map<Object, Object> entries = redisTemplate.opsForHash()
-                .entries(REDIS_PENDING_KEY);
-
-        if (entries.isEmpty()) {
-            return;
-        }
-
-        log.info("Flushing {} pending post operations", entries.size());
-
-        List<Post> toSave = new ArrayList<>();
-        List<Post> newlyCreated = new ArrayList<>();
-        List<Long> toDelete = new ArrayList<>();
-        List<Object> processedKeys = new ArrayList<>();
-        for (Map.Entry<Object, Object> entry : entries.entrySet()) {
-            Object key = entry.getKey();
-            String json = (String) entry.getValue();
-            Operation<Post> op = Operation.fromJson(json, Post.class);
-            switch (op.type()) {
-                case CREATE -> {
-                    op.data().setId(null); // Clear ID for new comments
-                    toSave.add(op.data());
-                    newlyCreated.add(op.data()); // track new ones
-                    processedKeys.add(key);
-                }
-                case UPDATE -> {
-                    toSave.add(op.data());
-                    processedKeys.add(key);
-                }
-                case DELETE -> {
-                    toDelete.add(op.data().getId());
-                    processedKeys.add(key);
-                }
-                default -> {
-                }
-            }
-        }
-
-        if (!toSave.isEmpty()) {
-            // Save or update
-            postRepository.saveAll(toSave);
-            propagatePostToFollowers(newlyCreated);
-            log.info("Saved/updated {} reactions", toSave.size());
-        }
-
-        if (!toDelete.isEmpty()) {
-            postRepository.softDeleteByIds(toDelete, Instant.now());
-            log.info("Deleted {} reactions", toDelete.size());
-        }
-
-        if (!processedKeys.isEmpty()) {
-            redisTemplate.opsForHash().delete(REDIS_PENDING_KEY, processedKeys.toArray());
-            log.info("Removed {} processed operations from Redis", processedKeys.size());
-        }
+        log.debug("🦋 Cache hit for trending : {}", trending);
+        return trending;
     }
 
     /**
