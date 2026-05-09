@@ -114,7 +114,7 @@ public class PostRedisService {
      */
     public Optional<Trending> getTrending() {
         log.debug("Trending...");
-        return Optional.of(redis.opsForValue().get(REDIS_TRENDING_KEY))
+        return Optional.ofNullable(redis.opsForValue().get(REDIS_TRENDING_KEY))
                 .map(t -> CacheTools.fromJson((String) t, Trending.class));
     }
 
