@@ -293,6 +293,7 @@ public class Post implements Serializable {
                 ", visible='" + getVisible() + "'" +
                 ", content='" + getContent() + "'" +
                 ", status='" + getStatus() + "'" +
+                ", reply='" + getPostReply() + "'" +
                 "}";
     }
 }
