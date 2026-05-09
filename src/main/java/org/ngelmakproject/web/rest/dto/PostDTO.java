@@ -18,7 +18,7 @@ public record PostDTO(
         Set<FileDTO> files,
         ReactionSummaryDTO reactions,
         Integer commentCount,
-        PostDTO replyTo) {
+        PostDTO postReply) {
     public static PostDTO from(Post p, ReactionSummaryDTO reactions) {
         if (p == null)
             return null;
