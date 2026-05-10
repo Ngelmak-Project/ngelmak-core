@@ -286,10 +286,10 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			LEFT JOIN FETCH p.postReply
 			LEFT JOIN FETCH p.channel
 			LEFT JOIN FETCH p.files
+			LEFT JOIN Reaction r ON r.post.id = p.id
 			WHERE p.at >= :since
-			ORDER BY (p.commentCount * 2.0 +
-			          (SELECT COUNT(r) FROM Reaction r WHERE r.post.id = p.id) +
-			          EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - p.at)) / 3600.0 * 0.5) DESC
+			GROUP BY p.id
+			ORDER BY (p.commentCount * 2.0 + COUNT(r) + CAST(DATEDIFF(SECOND, p.at, CURRENT_TIMESTAMP) AS DOUBLE) * 0.5 / 3600.0) DESC
 			""")
 	List<Post> trendingPosts(@Param("since") Instant since, Pageable pageable);
 
