@@ -281,14 +281,14 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	 *         first).
 	 */
 	@Query("""
-			SELECT p
+			SELECT p.id
 			FROM Post p
 			LEFT JOIN Reaction r ON r.post.id = p.id
 			WHERE p.at >= :since
 			GROUP BY p.id
 			ORDER BY (p.commentCount * 2.0 + COUNT(r) + CAST(DATEDIFF(SECOND, p.at, CURRENT_TIMESTAMP) AS DOUBLE) * 0.5 / 3600.0) DESC
 			""")
-	List<Post> trendingPosts(@Param("since") Instant since, Pageable pageable);
+	List<Long> trendingPosts(@Param("since") Instant since, Pageable pageable);
 
 	/**
 	 * Fetches the top 5 most engaged posts from the specified date, ranked by
@@ -303,17 +303,14 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	 *         first).
 	 */
 	@Query("""
-			SELECT p
+			SELECT p.id
 			FROM Post p
-			LEFT JOIN FETCH p.postReply
-			LEFT JOIN FETCH p.channel
-			LEFT JOIN FETCH p.files
 			LEFT JOIN Reaction r ON r.post.id = p.id
 			WHERE p.at >= :since
 			GROUP BY p.id
 			ORDER BY (p.commentCount * 2.0 + COUNT(r)) DESC, p.at DESC
 			""")
-	List<Post> mostEngagedPosts(@Param("since") Instant since, Pageable pageable);
+	List<Long> mostEngagedPosts(@Param("since") Instant since, Pageable pageable);
 
 	/**
 	 * Use an @EntityGraph to fetch channel + files in one go:

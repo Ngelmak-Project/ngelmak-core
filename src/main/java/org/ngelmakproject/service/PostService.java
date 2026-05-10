@@ -489,24 +489,22 @@ public class PostService {
             posts.addAll(page.getContent().stream().map(Feed::getPost).toList());
         }
         // 2. Fetch posts.
-        List<Long> ids = postRepository.fetchFeedPostIds(
+        List<Long> postIds = postRepository.fetchFeedPostIds(
                 sessionKey,
                 windowStart.getEpochSecond(),
                 pageable.getPageSize(),
                 (int) pageable.getOffset());
-        posts.addAll(postRepository.findAllByIdIn(ids));
+        posts.addAll(postRepository.findAllByIdIn(postIds));
         //
         posts.sort((a, b) -> {
             return -1 * a.getAt().compareTo(b.getAt());
         });
 
-        // Extract post IDs
-        List<Long> postIds = posts.stream().map(Post::getId).toList();
-        // 2. Bulk fetch reactions for all posts in the feed
+        // Bulk fetch reactions for all posts in the feed
         List<Reaction> reactions = reactionRepository.findByPostIds(postIds);
-        // 3. Group reactions by postId
+        // Group reactions by postId
         Map<Long, List<Reaction>> reactionsByPost = ReactionService.groupReactionsByPost(reactions);
-        // 4. Map feed entries to DTOs
+        // Map feed entries to DTOs
         List<PostDTO> feeds = posts.stream().map(post -> {
             List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
             ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions,
@@ -542,23 +540,21 @@ public class PostService {
             posts.addAll(page.getContent().stream().map(Feed::getPost).toList());
         }
         // 2. Fetch posts.
-        List<Long> ids = postRepository.searchFullText(
+        List<Long> postIds = postRepository.searchFullText(
                 query,
                 pageable.getPageSize(),
                 (int) pageable.getOffset());
-        posts.addAll(postRepository.findAllByIdIn(ids));
+        posts.addAll(postRepository.findAllByIdIn(postIds));
         //
         posts.sort((a, b) -> {
             return -1 * a.getAt().compareTo(b.getAt());
         });
 
-        // Extract post IDs
-        List<Long> postIds = posts.stream().map(Post::getId).toList();
-        // 2. Bulk fetch reactions for all posts in the feed
+        // Bulk fetch reactions for all posts in the feed
         List<Reaction> reactions = reactionRepository.findByPostIds(postIds);
-        // 3. Group reactions by postId
+        // Group reactions by postId
         Map<Long, List<Reaction>> reactionsByPost = ReactionService.groupReactionsByPost(reactions);
-        // 4. Map feed entries to DTOs
+        // Map feed entries to DTOs
         List<PostDTO> feeds = posts.stream().map(post -> {
             List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
             ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions,
@@ -617,11 +613,11 @@ public class PostService {
         List<Long> postIds = feeds.stream()
                 .map(f -> f.getPost().getId())
                 .toList();
-        // 2. Bulk fetch reactions for all posts in the feed
+        // Bulk fetch reactions for all posts in the feed
         List<Reaction> reactions = reactionRepository.findByPostIds(postIds);
-        // 3. Group reactions by postId
+        // Group reactions by postId
         Map<Long, List<Reaction>> reactionsByPost = ReactionService.groupReactionsByPost(reactions);
-        // 4. Map feed entries to DTOs
+        // Map feed entries to DTOs
         List<FeedDTO> feedDTOs = feeds.stream().map(feed -> {
             var post = feed.getPost();
             List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
@@ -647,23 +643,26 @@ public class PostService {
         Trending trending = postRedisService.getTrending().orElseGet(() -> {
             log.warn("🦋 Cache miss for trending, fetching from database");
 
-            List<Post> trendingPosts = fetchPostsWithFallback(
+            List<Long> trendingPostIds = fetchPostsWithFallback(
                     since -> postRepository.trendingPosts(since, PageRequest.of(0, 5)));
 
-            List<Post> mostEngagedPosts = fetchPostsWithFallback(
+            List<Long> mostEngagedPostIds = fetchPostsWithFallback(
                     since -> postRepository.mostEngagedPosts(since, PageRequest.of(0, 5)));
 
-            // Extract post IDs from both lists
             List<Long> postIds = Stream.concat(
-                    mostEngagedPosts.stream().map(Post::getId),
-                    trendingPosts.stream().map(Post::getId)).toList();
+                    mostEngagedPostIds.stream(),
+                    trendingPostIds.stream()).toList();
+
+            // Find post by Id
+            List<Post> posts = postRepository.findAllById(postIds);
 
             // Single bulk fetch for all reactions
             List<Reaction> reactions = reactionRepository.findByPostIds(postIds);
             Map<Long, List<Reaction>> reactionsByPost = ReactionService.groupReactionsByPost(reactions);
 
             // Map both lists to DTOs
-            List<PostDTO> mostCommentedPostDTOs = mostEngagedPosts.stream()
+            List<PostDTO> mostCommentedPostDTOs = posts.stream()
+                    .filter(post -> mostEngagedPostIds.contains(post.getId()))
                     .map(post -> {
                         List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
                         ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions, null);
@@ -671,7 +670,8 @@ public class PostService {
                     })
                     .toList();
 
-            List<PostDTO> trendingPostDTOs = trendingPosts.stream()
+            List<PostDTO> trendingPostDTOs = posts.stream()
+                    .filter(post -> trendingPostIds.contains(post.getId()))
                     .map(post -> {
                         List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
                         ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions, null);
@@ -703,11 +703,11 @@ public class PostService {
      * @return a list of posts from the earliest successful fetch, or an empty
      *         list if no results are found within 90 days
      */
-    private List<Post> fetchPostsWithFallback(Function<Instant, List<Post>> fetcher) {
+    private List<Long> fetchPostsWithFallback(Function<Instant, List<Long>> fetcher) {
         long[] dayOffsets = { 7, 30, 90 };
 
         for (long days : dayOffsets) {
-            List<Post> posts = fetcher.apply(
+            List<Long> posts = fetcher.apply(
                     Instant.now().minus(days, ChronoUnit.DAYS));
             if (!posts.isEmpty()) {
                 return posts;
