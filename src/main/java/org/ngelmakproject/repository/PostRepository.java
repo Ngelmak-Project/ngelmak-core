@@ -27,8 +27,6 @@ import jakarta.persistence.PersistenceException;
 @SuppressWarnings("unused")
 @Repository
 public interface PostRepository extends JpaRepository<Post, Long> {
-	Optional<Post> findById(Long id);
-
 	Optional<PostProjection> findProjectedById(Long id);
 
 	@Modifying
@@ -245,6 +243,21 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			@Param("limit") int limit,
 			@Param("offset") int offset);
 
+	/**
+	 * Retrieves a post by ID with channel, files, and postReply eagerly loaded.
+	 *
+	 * @param id the post ID
+	 * @return an Optional containing the post if found
+	 */
+	@EntityGraph(attributePaths = { "channel", "files", "postReply" })
+	Optional<Post> findById(Long id);
+
+	/**
+	 * Retrieves posts by IDs with channel, files, and postReply eagerly loaded.
+	 *
+	 * @param ids the post IDs
+	 * @return a list of matching posts
+	 */
 	@EntityGraph(attributePaths = { "channel", "files", "postReply" })
 	List<Post> findAllByIdIn(List<Long> ids);
 
@@ -264,7 +277,9 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			LEFT JOIN FETCH p.files
 			WHERE p.channel.id = :channelId AND p.status = :status
 			""")
-	Slice<Post> findByChannelAndStatus(@Param("channelId") Long channelId, @Param("status") Status status,
+	Slice<Post> findByChannelAndStatus(
+			@Param("channelId") Long channelId,
+			@Param("status") Status status,
 			Pageable pageable);
 
 	/**
