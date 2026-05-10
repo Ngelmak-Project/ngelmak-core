@@ -283,9 +283,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	@Query("""
 			SELECT p
 			FROM Post p
-			LEFT JOIN FETCH p.postReply
-			LEFT JOIN FETCH p.channel
-			LEFT JOIN FETCH p.files
 			LEFT JOIN Reaction r ON r.post.id = p.id
 			WHERE p.at >= :since
 			GROUP BY p.id
