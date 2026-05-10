@@ -68,7 +68,7 @@ public class Post implements Serializable {
     private Status status;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    // @JsonIncludeProperties(value = { "id", "content" })
+    @JsonIncludeProperties(value = { "id", "content", "at", "channel" })
     private Post postReply;
 
     @ManyToOne(fetch = FetchType.EAGER, optional = false)
