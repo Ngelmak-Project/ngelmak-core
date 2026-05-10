@@ -3,11 +3,13 @@ package org.ngelmakproject.service;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.stream.Stream;
 
 import org.ngelmakproject.config.Constants;
@@ -645,16 +647,15 @@ public class PostService {
         Trending trending = postRedisService.getTrending().orElseGet(() -> {
             log.warn("🦋 Cache miss for trending, fetching from database");
 
-            List<Post> mostCommentedPosts = postRepository.mostCommentedPosts(
-                    Instant.now().minus(30, ChronoUnit.DAYS),
-                    PageRequest.of(0, 5));
-            List<Post> trendingPosts = postRepository.trendingPosts(
-                    Instant.now().minus(30, ChronoUnit.DAYS),
-                    PageRequest.of(0, 5));
+            List<Post> trendingPosts = fetchPostsWithFallback(
+                    since -> postRepository.trendingPosts(since, PageRequest.of(0, 5)));
+
+            List<Post> mostEngagedPosts = fetchPostsWithFallback(
+                    since -> postRepository.mostEngagedPosts(since, PageRequest.of(0, 5)));
 
             // Extract post IDs from both lists
             List<Long> postIds = Stream.concat(
-                    mostCommentedPosts.stream().map(Post::getId),
+                    mostEngagedPosts.stream().map(Post::getId),
                     trendingPosts.stream().map(Post::getId)).toList();
 
             // Single bulk fetch for all reactions
@@ -662,7 +663,7 @@ public class PostService {
             Map<Long, List<Reaction>> reactionsByPost = ReactionService.groupReactionsByPost(reactions);
 
             // Map both lists to DTOs
-            List<PostDTO> mostCommentedPostDTOs = mostCommentedPosts.stream()
+            List<PostDTO> mostCommentedPostDTOs = mostEngagedPosts.stream()
                     .map(post -> {
                         List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
                         ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions, null);
@@ -690,6 +691,30 @@ public class PostService {
 
         log.debug("🦋 Cache hit for trending : {}", trending);
         return trending;
+    }
+
+    /**
+     * Fetches posts using progressively extended date ranges if results are empty.
+     * Attempts to retrieve posts within 7, 30, and 90 days respectively until
+     * non-empty results are found.
+     *
+     * @param fetcher a function that accepts an Instant (since date) and returns
+     *                a list of posts from that date onward
+     * @return a list of posts from the earliest successful fetch, or an empty
+     *         list if no results are found within 90 days
+     */
+    private List<Post> fetchPostsWithFallback(Function<Instant, List<Post>> fetcher) {
+        long[] dayOffsets = { 7, 30, 90 };
+
+        for (long days : dayOffsets) {
+            List<Post> posts = fetcher.apply(
+                    Instant.now().minus(days, ChronoUnit.DAYS));
+            if (!posts.isEmpty()) {
+                return posts;
+            }
+        }
+
+        return Collections.emptyList();
     }
 
     /**

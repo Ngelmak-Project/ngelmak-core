@@ -3,13 +3,16 @@ package org.ngelmakproject.service;
 import java.text.Normalizer;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
 import org.ngelmakproject.domain.Channel;
+import org.ngelmakproject.domain.Post;
 import org.ngelmakproject.domain.Subscription;
 import org.ngelmakproject.repository.ChannelRepository;
 import org.ngelmakproject.repository.SubscriptionRepository;
+import org.ngelmakproject.repository.projection.ActiveChannelProjection;
 import org.ngelmakproject.security.UserService;
 import org.ngelmakproject.service.cache.ChannelRedisService;
 import org.ngelmakproject.web.rest.dto.ActiveChannel;
@@ -382,11 +385,7 @@ public class ChannelService {
 
     /**
      * Retrieves the top 10 most active channels based on post activity in the last
-     * 30 days.
-     * 
-     * Fetches channel data from the repository and maps projections to
-     * ActiveChannel DTOs
-     * for API response serialization.
+     * 30 days, with fallback to 7 and 90 days if no results are found.
      * 
      * Channels are ranked by:
      * 1. Post count in the last 30 days (descending)
@@ -398,17 +397,26 @@ public class ChannelService {
      */
     public List<ActiveChannel> getActiveChannels() {
         log.debug("Fetching most active channels (30-day window)");
-        return this.channelRepository.topActiveChannels(Instant.now().minus(30, ChronoUnit.DAYS), PageRequest.of(0, 10))
-                .stream()
-                .map(e -> new ActiveChannel(
-                        e.getId(),
-                        e.getName(),
-                        e.getIdentifier(),
-                        e.getAvatar(),
-                        e.getBanner(),
-                        e.getDescription(),
-                        e.getPostCount()))
-                .toList();
+        long[] dayOffsets = { 7, 30, 90 };
+
+        for (long days : dayOffsets) {
+            List<ActiveChannelProjection> activeChannel = this.channelRepository.topActiveChannels(
+                    Instant.now().minus(days, ChronoUnit.DAYS), PageRequest.of(0, 10));
+            if (!activeChannel.isEmpty()) {
+                return activeChannel.stream()
+                        .map(e -> new ActiveChannel(
+                                e.getId(),
+                                e.getName(),
+                                e.getIdentifier(),
+                                e.getAvatar(),
+                                e.getBanner(),
+                                e.getDescription(),
+                                e.getPostCount()))
+                        .toList();
+            }
+        }
+
+        return Collections.emptyList();
     }
 
     /**

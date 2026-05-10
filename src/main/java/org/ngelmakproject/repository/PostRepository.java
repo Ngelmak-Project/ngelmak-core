@@ -39,12 +39,12 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	List<PostProjection> findExpiredPosts(Instant cutoff);
 
 	// @Query("""
-	// 		SELECT pf.file.id FROM
-	// 		Post p
-	// 		LEFT JOIN
-	// 		FETCH p.files pf
-	// 		WHERE p.deletedAt<:cutoff
-	// 		""")
+	// SELECT pf.file.id FROM
+	// Post p
+	// LEFT JOIN
+	// FETCH p.files pf
+	// WHERE p.deletedAt<:cutoff
+	// """)
 	// List<Long> findFileIdsForExpiredPosts(Instant cutoff);
 
 	@Query(value = """
@@ -268,35 +268,17 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			Pageable pageable);
 
 	/**
-	 * Fetches the top 5 trending posts from the last 7 days, ranked by engagement
-	 * and recency.
+	 * Fetches the top 5 trending posts from the specified date, ranked by
+	 * engagement and recency.
 	 *
-	 * Scoring: commentCount * 2.0 + (hours since window start / 3600 * 0.5)
+	 * Scoring: commentCount * 2.0 + reactionCount + (hours since post creation *
+	 * 0.5)
+	 * Recent posts with high engagement rank highest.
 	 *
+	 * @param since    the start date to filter posts
+	 * @param pageable pagination parameters
 	 * @return List of up to 5 Post objects ranked by trending score (highest
 	 *         first).
-	 * @throws PersistenceException if database doesn't support EXTRACT(EPOCH).
-	 *                              PostgreSQL required.
-	 * @see #trendingPosts() for native query alternative with better performance.
-	 */
-	@Query("""
-			SELECT DISTINCT p
-			FROM Post p
-			LEFT JOIN FETCH p.postReply
-			LEFT JOIN FETCH p.channel
-			LEFT JOIN FETCH p.files
-			WHERE p.at >= :since
-			ORDER BY p.commentCount DESC
-			""")
-	List<Post> trendingPosts(@Param("since") Instant since, Pageable pageable);
-
-	/**
-	 * Fetches the top 5 most commented posts from the last 7 days, ranked by
-	 * discussion activity.
-	 *
-	 * Ranking: commentCount (descending)
-	 *
-	 * @return List of up to 5 Post objects ranked by commentCount (highest first).
 	 */
 	@Query("""
 			SELECT p
@@ -304,10 +286,37 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			LEFT JOIN FETCH p.postReply
 			LEFT JOIN FETCH p.channel
 			LEFT JOIN FETCH p.files
+			LEFT JOIN Reaction r ON r.post.id = p.id
 			WHERE p.at >= :since
-			ORDER BY p.commentCount DESC
+			GROUP BY p.id
+			ORDER BY (p.commentCount * 2.0 + COUNT(r) + EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - p.at)) / 3600.0 * 0.5) DESC
 			""")
-	List<Post> mostCommentedPosts(@Param("since") Instant since, Pageable pageable);
+	List<Post> trendingPosts(@Param("since") Instant since, Pageable pageable);
+
+	/**
+	 * Fetches the top 5 most engaged posts from the specified date, ranked by
+	 * combined discussion activity and user reactions.
+	 *
+	 * <p>
+	 * Scoring: commentCount * 2.0 + reactionCount (descending)
+	 *
+	 * @param since    the start date to filter posts
+	 * @param pageable pagination parameters
+	 * @return List of up to 5 Post objects ranked by engagement score (highest
+	 *         first).
+	 */
+	@Query("""
+			SELECT p
+			FROM Post p
+			LEFT JOIN FETCH p.postReply
+			LEFT JOIN FETCH p.channel
+			LEFT JOIN FETCH p.files
+			LEFT JOIN Reaction r ON r.post.id = p.id
+			WHERE p.at >= :since
+			GROUP BY p.id
+			ORDER BY (p.commentCount * 2.0 + COUNT(r)) DESC, p.at DESC
+			""")
+	List<Post> mostEngagedPosts(@Param("since") Instant since, Pageable pageable);
 
 	/**
 	 * Use an @EntityGraph to fetch channel + files in one go:
