@@ -661,7 +661,7 @@ public class PostService {
             Map<Long, List<Reaction>> reactionsByPost = ReactionService.groupReactionsByPost(reactions);
 
             // Map both lists to DTOs
-            List<PostDTO> mostCommentedPostDTOs = posts.stream()
+            List<PostDTO> mostEngagedPostDTOs = posts.stream()
                     .filter(post -> mostEngagedPostIds.contains(post.getId()))
                     .map(post -> {
                         List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
@@ -681,7 +681,7 @@ public class PostService {
 
             List<ActiveChannel> topActiveChannels = channelService.getActiveChannels();
 
-            Trending t = new Trending(topActiveChannels, trendingPostDTOs, mostCommentedPostDTOs);
+            Trending t = new Trending(topActiveChannels, trendingPostDTOs, mostEngagedPostDTOs);
 
             // Save to Redis.
             postRedisService.setTrending(t);

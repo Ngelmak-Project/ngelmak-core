@@ -85,11 +85,11 @@ public class CommentRedisService {
      * @param commentId the ID of the Comment whose comment count is updated
      * @param count     the delta to apply (positive or negative)
      */
-    public void queueReplyCount(long commentId, int count) {
+    public void queueReplyCount(Long commentId, int count) {
         // Record to redis for updating reply count.
         String json = CacheTools.toJson(new ReplyCountDTO(commentId, count));
         redis.opsForHash()
-                .put(REDIS_REPLY_COUNT_KEY, commentId, json);
+                .put(REDIS_REPLY_COUNT_KEY, commentId.toString(), json);
         log.info("📦 Redis | Comment comment count - {} → {}", commentId, count);
     }
 
