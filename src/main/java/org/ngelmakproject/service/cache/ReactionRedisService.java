@@ -127,8 +127,12 @@ public class ReactionRedisService {
         // Save or update
         reactionRepository.saveAll(toSave);
 
-        redis.opsForHash().delete(REDIS_CREATE_KEY, createdKeys.toArray());
-        redis.opsForHash().delete(REDIS_UPDATE_KEY, updatedKeys.toArray());
+        if (!createdKeys.isEmpty()) {
+            redis.opsForHash().delete(REDIS_CREATE_KEY, createdKeys.toArray());
+        }
+        if (!updatedKeys.isEmpty()) {
+            redis.opsForHash().delete(REDIS_UPDATE_KEY, updatedKeys.toArray());
+        }
         log.info("Flushing {} pending reaction operations", toSave.size());
     }
 
@@ -153,10 +157,10 @@ public class ReactionRedisService {
             toDeleteChannelIds.add(reaction.getChannel().getId());
         }
 
-        reactionRepository.deleteByIdInAndChannelIn(
-                toDeleteIds,
-                toDeleteChannelIds);
-        redis.opsForHash().delete(REDIS_DELETE_KEY, processedKeys.toArray());
+        reactionRepository.deleteByIdInAndChannelIn(toDeleteIds, toDeleteChannelIds);
+        if (!processedKeys.isEmpty()) {
+            redis.opsForHash().delete(REDIS_DELETE_KEY, processedKeys.toArray());
+        }
         log.info("Removed {} processed operations from Redis", processedKeys.size());
     }
 }

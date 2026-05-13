@@ -188,7 +188,9 @@ public class PostRedisService {
             toDelete.add(id);
         }
         postRepository.deleteAllById(toDelete);
-        redis.opsForHash().delete(REDIS_DELETE_KEY, processedKeys.toArray());
+        if (!processedKeys.isEmpty()) {
+            redis.opsForHash().delete(REDIS_DELETE_KEY, processedKeys.toArray());
+        }
         log.info("Removed {} processed operations from Redis", processedKeys.size());
     }
 
@@ -223,6 +225,8 @@ public class PostRedisService {
                 .forEach(postRepository::updatePostCommentCount);
 
         // Clear processed entries
-        redis.opsForHash().delete(REDIS_REPLY_COUNT_KEY, processedKeys.toArray());
+        if (!processedKeys.isEmpty()) {
+            redis.opsForHash().delete(REDIS_REPLY_COUNT_KEY, processedKeys.toArray());
+        }
     }
 }

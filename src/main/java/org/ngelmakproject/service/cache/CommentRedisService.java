@@ -121,8 +121,13 @@ public class CommentRedisService {
         }
 
         commentRepository.saveAll(toSave);
-        redis.opsForHash().delete(REDIS_CREATE_KEY, createdKeys.toArray());
-        redis.opsForHash().delete(REDIS_UPDATE_KEY, updatedKeys.toArray());
+        // Only delete if there are keys to delete
+        if (!createdKeys.isEmpty()) {
+            redis.opsForHash().delete(REDIS_CREATE_KEY, createdKeys.toArray());
+        }
+        if (!updatedKeys.isEmpty()) {
+            redis.opsForHash().delete(REDIS_UPDATE_KEY, updatedKeys.toArray());
+        }
         log.info("Flushing {} pending comment operations", toSave.size());
     }
 
@@ -143,7 +148,9 @@ public class CommentRedisService {
             toDelete.add(id);
         }
         commentRepository.deleteAllById(toDelete);
-        redis.opsForHash().delete(REDIS_DELETE_KEY, processedKeys.toArray());
+        if (!processedKeys.isEmpty()) {
+            redis.opsForHash().delete(REDIS_DELETE_KEY, processedKeys.toArray());
+        }
         log.info("Removed {} processed operations from Redis", processedKeys.size());
     }
 
@@ -178,6 +185,8 @@ public class CommentRedisService {
                 .forEach(commentRepository::updateReplyCount);
 
         // Clear processed entries
-        redis.opsForHash().delete(REDIS_REPLY_COUNT_KEY, processedKeys.toArray());
+        if (!processedKeys.isEmpty()) {
+            redis.opsForHash().delete(REDIS_REPLY_COUNT_KEY, processedKeys.toArray());
+        }
     }
 }
