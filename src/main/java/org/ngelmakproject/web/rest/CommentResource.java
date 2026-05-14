@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -148,11 +149,10 @@ public class CommentResource {
     }
 
     @GetMapping("/reply/{id}")
-    public ResponseEntity<List<CommentDTO>> getRepliesByComment(@PathVariable Long id, Pageable pageable) {
-        log.debug("REST request to get Comments of Post id : {} | Pageable {}", id, pageable);
-        List<CommentDTO> commentDTOs = commentRepository.findRepliesByComment(id)
-                .stream().map(c -> CommentDTO.from(c)).toList();
-        return ResponseEntity.ok().body(commentDTOs);
+    public ResponseEntity<List<CommentDTO>> getRepliesByComment(@PathVariable Long id,
+            @RequestParam(required = false, defaultValue = "-1") Integer storedReplyCount) {
+        log.debug("REST request to get Comments of Post id : {} | With stored reply count: {}", id, storedReplyCount);
+        return ResponseEntity.ok().body(commentService.findRepliesByComment(id, storedReplyCount));
     }
 
     /**

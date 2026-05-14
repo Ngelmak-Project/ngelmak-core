@@ -1,14 +1,16 @@
 package org.ngelmakproject.service.cache;
 
+import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import org.ngelmakproject.domain.Comment;
 import org.ngelmakproject.repository.CommentRepository;
+import org.ngelmakproject.repository.projection.CommentProjection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -25,15 +27,16 @@ public class CommentRedisService {
     private static final String REDIS_DELETE_KEY = "comment:delete";
     private static final String REDIS_REPLY_COUNT_KEY = "comment:replycount";
 
-    private record ReplyCountDTO(long id, int count) {
-    }
-
     private final CommentRepository commentRepository;
     private final RedisTemplate<String, String> redis;
+    private final PostRedisService postRedisService;
 
-    public CommentRedisService(CommentRepository commentRepository, RedisTemplate<String, String> redis) {
+    public CommentRedisService(CommentRepository commentRepository,
+            RedisTemplate<String, String> redis,
+            PostRedisService postRedisService) {
         this.commentRepository = commentRepository;
         this.redis = redis;
+        this.postRedisService = postRedisService;
     }
 
     /**
@@ -72,25 +75,24 @@ public class CommentRedisService {
     /**
      * Enqueues a Comment ID for async deletion.
      *
-     * @param id the ID of the Comment to delete
+     * @param comment the Comment to delete
      */
-    public void queueDelete(Long id) {
-        redis.opsForHash().put(REDIS_DELETE_KEY, id.toString(), id);
-        log.warn("📦 Redis | Comment deleted - {}", id);
+    public void queueDelete(CommentProjection comment) {
+        String value = CacheTools.toJson(comment);
+        redis.opsForHash().put(REDIS_DELETE_KEY, comment.getId().toString(), value);
+        log.warn("📦 Redis | Comment deleted - {}", value);
     }
 
     /**
      * Enqueues a comment count change for a Comment.
      *
      * @param commentId the ID of the Comment whose comment count is updated
-     * @param count     the delta to apply (positive or negative)
      */
-    public void queueReplyCount(Long commentId, int count) {
+    public void queueReplyCount(Long commentId) {
         // Record to redis for updating reply count.
-        String json = CacheTools.toJson(new ReplyCountDTO(commentId, count));
         redis.opsForHash()
-                .put(REDIS_REPLY_COUNT_KEY, commentId.toString(), json);
-        log.info("📦 Redis | Comment comment count - {} → {}", commentId, count);
+                .put(REDIS_REPLY_COUNT_KEY, commentId.toString(), commentId.toString());
+        log.info("📦 Redis | Comment comment count - {}", commentId);
     }
 
     /**
@@ -108,6 +110,13 @@ public class CommentRedisService {
             Comment newComment = CacheTools.fromJson(json, Comment.class);
             newComment.setId(null);
             toSave.add(newComment);
+            // If this comment is a reply, queue an update for the parent comment to refresh
+            // its reply count.
+            if (newComment.getReplyTo() != null) {
+                queueReplyCount(newComment.getReplyTo().getId());
+            } else if (newComment.getPost() != null) {
+                postRedisService.queueCommmentCount(newComment.getPost().getId());
+            }
             log.info("Saved {} comment(s)", createdKeys.size());
         }
         Set<Object> updatedKeys = redis.opsForHash().keys(REDIS_UPDATE_KEY);
@@ -121,6 +130,7 @@ public class CommentRedisService {
         }
 
         commentRepository.saveAll(toSave);
+
         // Only delete if there are keys to delete
         if (!createdKeys.isEmpty()) {
             redis.opsForHash().delete(REDIS_CREATE_KEY, createdKeys.toArray());
@@ -142,12 +152,25 @@ public class CommentRedisService {
         if (processedKeys.isEmpty()) {
             return;
         }
-        Set<Long> toDelete = new HashSet<>();
-        for (Object key : processedKeys) {
-            Long id = Long.valueOf((String) redis.opsForHash().get(REDIS_DELETE_KEY, key));
-            toDelete.add(id);
-        }
-        commentRepository.deleteAllById(toDelete);
+        List<CommentProjection> toDelete = processedKeys.stream()
+                .map(k -> (String) redis.opsForHash().get(REDIS_DELETE_KEY, k))
+                .map(json -> CacheTools.fromJson(json, CommentProjection.class))
+                .toList();
+
+        Set<Long> toDeleteIds = toDelete.stream().map(CommentProjection::getId).collect(Collectors.toSet());
+        Set<Long> replyCommentIds = toDelete.stream()
+                .map(CommentProjection::getReplyToId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        commentRepository.softDeleteByIds(toDeleteIds, Instant.now());
+        commentRepository.updateReplyCount(replyCommentIds);
+        toDelete.stream()
+                .map(CommentProjection::getPostId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet())
+                .forEach(postRedisService::queueCommmentCount);
+
         if (!processedKeys.isEmpty()) {
             redis.opsForHash().delete(REDIS_DELETE_KEY, processedKeys.toArray());
         }
@@ -175,14 +198,11 @@ public class CommentRedisService {
         log.info("Flushing {} pending reply count operations", processedKeys.size());
 
         // Aggregate and apply updates in one operation
-        processedKeys.stream()
+        Set<Long> commentIds = processedKeys.stream()
                 .map(k -> (String) redis.opsForHash().get(REDIS_REPLY_COUNT_KEY, k))
-                .map(json -> CacheTools.fromJson(json, ReplyCountDTO.class))
-                .collect(Collectors.toMap(
-                        ReplyCountDTO::id,
-                        ReplyCountDTO::count,
-                        Integer::sum))
-                .forEach(commentRepository::updateReplyCount);
+                .map(Long::parseLong)
+                .collect(Collectors.toSet());
+        commentRepository.updateReplyCount(commentIds);
 
         // Clear processed entries
         if (!processedKeys.isEmpty()) {

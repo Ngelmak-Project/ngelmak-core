@@ -253,24 +253,6 @@ public class PostService {
     }
 
     /**
-     * Update Post total comments.
-     * 
-     * <p>
-     * This method is responsible of tracking and updating total comments of Posts.
-     * <\p>
-     * 
-     * update automatically the comment count.
-     * It should be handle by a cron
-     * 
-     * @param postId
-     * @param count  could be a positive or negative number.
-     */
-    public void updateCommmentCount(Long postId, Integer count) {
-        // Record to redis for updating reply count.
-        postRedisService.queueCommmentCount(postId, count);
-    }
-
-    /**
      * Retrieves a pageable list of all posts enriched with:
      * <p>
      * - minimal channel information

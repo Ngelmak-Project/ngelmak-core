@@ -12,6 +12,7 @@ import org.ngelmakproject.domain.File;
 import org.ngelmakproject.repository.CommentRepository;
 import org.ngelmakproject.repository.projection.CommentProjection;
 import org.ngelmakproject.service.cache.CommentRedisService;
+import org.ngelmakproject.web.rest.dto.CommentDTO;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
 import org.ngelmakproject.web.rest.errors.ChannelNotFoundException;
 import org.ngelmakproject.web.rest.errors.ResourceNotFoundException;
@@ -33,9 +34,9 @@ public class CommentService {
     private static final Logger log = LoggerFactory.getLogger(CommentService.class);
 
     private final FileService fileService;
-    private final PostService postService;
     private final ChannelService channelService;
     private final CommentRepository commentRepository;
+
     private final CommentRedisService commentRedisService;
 
     public CommentService(CommentRepository commentRepository, FileService fileService,
@@ -44,7 +45,6 @@ public class CommentService {
         this.commentRepository = commentRepository;
         this.fileService = fileService;
         this.channelService = channelService;
-        this.postService = postService;
         this.commentRedisService = commentRedisService;
     }
 
@@ -90,12 +90,7 @@ public class CommentService {
                 .file(savedFiles.stream().findFirst().orElse(null))
                 .channel(channel);
         // Update counters (post or parent comment)
-        if (comment.getPost() != null) {
-            postService.updateCommmentCount(comment.getPost().getId(), 1);
-        } else if (comment.getReplyTo() != null) {
-            // Record to redis for updating reply count.
-            commentRedisService.queueReplyCount(comment.getReplyTo().getId(), 1);
-        } else {
+        if (comment.getPost() != null && comment.getReplyTo() == null) {
             throw new BadRequestAlertException(
                     "A comment must refer to either a Post or another Comment.",
                     ENTITY_NAME,
@@ -200,15 +195,7 @@ public class CommentService {
             }
 
             // No pending CREATE found → queue a DELETE operation
-            commentRedisService.queueDelete(id);
-
-            // Update counters depending on comment type
-            if (projection.getPostId() != null) {
-                postService.updateCommmentCount(projection.getPostId(), -1);
-            } else if (projection.getReplyToId() != null) {
-                // Record to redis for updating reply count.
-                commentRedisService.queueReplyCount(projection.getReplyToId(), -1);
-            }
+            commentRedisService.queueDelete(projection);
         });
     }
 
@@ -232,6 +219,31 @@ public class CommentService {
                     ENTITY_NAME,
                     "contentTooLong");
         }
+    }
+
+    /**
+     * <p>
+     * Retrieves the list of replies for a given comment.
+     *
+     * This method fetches all replies to a specific comment. If the number of
+     * replies exceeds the count stored on the client, it queues an update to
+     * refresh the reply count in Redis.
+     * </p>
+     *
+     * @param id               the identifier of the parent comment
+     * @param storedReplyCount the number of replies currently stored on the client
+     * @return a list of CommentDTOs representing the replies
+     */
+    public List<CommentDTO> findRepliesByComment(long id, int storedReplyCount) {
+        List<CommentDTO> commentDTOs = commentRepository.findRepliesByComment(id)
+                .stream().map(c -> CommentDTO.from(c)).toList();
+        if (storedReplyCount > 0 && commentDTOs.size() != storedReplyCount) {
+            log.warn(
+                    "Reply count mismatch for comment id {}: client has {}, actual is {}. Queuing count update.",
+                    id, storedReplyCount, commentDTOs.size());
+            commentRedisService.queueReplyCount(id);
+        }
+        return commentDTOs;
     }
 
     /**

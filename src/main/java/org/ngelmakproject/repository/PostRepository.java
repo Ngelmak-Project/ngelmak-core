@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.ngelmakproject.domain.Channel;
 import org.ngelmakproject.domain.Post;
@@ -345,27 +346,111 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			""")
 	Slice<Post> findAllWithRelations(Pageable pageable);
 
+	/**
+	 * Recalculates and updates the comment count for all posts.
+	 * 
+	 * The comment count is determined by counting non-deleted comments that are
+	 * directly associated with each post (excluding replies to comments).
+	 * 
+	 * This operation performs a single bulk update across all posts in the
+	 * database.
+	 * Soft-deleted comments (where deletedAt is not null) are excluded from the
+	 * count.
+	 * 
+	 * Use this when performing a full synchronization of comment counts.
+	 */
 	@Modifying
 	@Query("""
 			UPDATE Post p
-			SET p.commentCount = (SELECT COUNT(c.id) FROM Comment c
-			WHERE c.post.id = p.id)
+			SET p.commentCount = (
+				SELECT COUNT(c.id) FROM Comment c
+				WHERE c.post.id = p.id AND c.deletedAt IS NULL
+			)
 			""")
 	void updateAllPostCommentCounts();
 
+	/**
+	 * Recalculates and updates the comment count for a set of specific posts.
+	 * 
+	 * The comment count is determined by counting non-deleted comments that are
+	 * directly associated with each post (excluding replies to comments).
+	 * 
+	 * Soft-deleted comments (where deletedAt is not null) are excluded from the
+	 * count.
+	 * 
+	 * This is useful for batch recalculations when you have multiple post IDs that
+	 * need their comment counts synchronized in a single bulk operation.
+	 * 
+	 * Index Usage: {@code nk_comment(post_id, deletedAt)} enables efficient
+	 * filtering
+	 * of comments per post while excluding soft-deleted entries.
+	 * 
+	 * @param postIds the IDs of posts whose comment counts should be recalculated
+	 */
 	@Modifying
 	@Query("""
 			UPDATE Post p
-			SET p.commentCount=(SELECT COUNT(c.id) FROM Comment c
-			WHERE c.post.id = :postId)
+			SET p.commentCount = (
+				SELECT COUNT(c.id) FROM Comment c
+				WHERE c.post.id = p.id AND c.deletedAt IS NULL
+			)
+			WHERE p.id IN :postIds
+			""")
+	void updatePostCommentCount(@Param("postIds") Set<Long> postIds);
+
+	/**
+	 * Recalculates and updates the comment count for a specific post.
+	 * 
+	 * The comment count is determined by counting non-deleted comments that are
+	 * directly associated with this post (excluding replies to comments).
+	 * 
+	 * Soft-deleted comments (where deletedAt is not null) are excluded from the
+	 * count.
+	 * 
+	 * @param postId the ID of the post whose comment count should be recalculated
+	 */
+	@Modifying
+	@Query("""
+			UPDATE Post p
+			SET p.commentCount = (
+				SELECT COUNT(c.id) FROM Comment c
+				WHERE c.post.id = p.id AND c.deletedAt IS NULL
+			)
+			WHERE p.id = :postId
 			""")
 	void updatePostCommentCount(@Param("postId") Long postId);
 
+	/**
+	 * Recalculates and updates the comment count for all posts that have comments
+	 * in the given set of comment IDs.
+	 * 
+	 * When a comment is added or deleted, this method identifies its associated
+	 * post(s) and recalculates their comment counts, excluding soft-deleted
+	 * comments
+	 * (where deletedAt is not null).
+	 * 
+	 * This is useful in comment lifecycle workflows where you have the IDs of
+	 * affected comments and need to update their post's comment counts in a single
+	 * bulk operation.
+	 * 
+	 * Index Usage: {@code nk_comment(post_id, deletedAt)} enables efficient
+	 * filtering
+	 * of comments per post while excluding soft-deleted entries.
+	 * 
+	 * @param commentIds the IDs of comments that were added or deleted, used to
+	 *                   find their associated posts
+	 */
 	@Modifying
 	@Query("""
-			UPDATE Post p
-			SET p.commentCount = GREATEST(0, p.commentCount + :countChange)
-			WHERE p.id = :postId
+			    UPDATE Post p
+			    SET p.commentCount = (
+			        SELECT COUNT(c.id) FROM Comment c
+			        WHERE c.post.id = p.id AND c.deletedAt IS NULL
+			    )
+			    WHERE p.id IN (
+			        SELECT c.post.id FROM Comment c WHERE c.id IN :commentIds
+			    )
 			""")
-	void updatePostCommentCount(@Param("postId") Long postId, @Param("countChange") Integer countChange);
+	void updatePostCommentCountByCommentIds(@Param("commentIds") Set<Long> commentIds);
+
 }

@@ -29,9 +29,6 @@ public class PostRedisService {
     private static final String REDIS_TRENDING_KEY = "post:trending";
     private static final String REDIS_REPLY_COUNT_KEY = "post:replycount";
 
-    private record ReplyCountDTO(long id, int count) {
-    }
-
     private final PostRepository postRepository;
     private final RedisTemplate<String, String> redis;
 
@@ -86,14 +83,12 @@ public class PostRedisService {
      * Enqueues a comment count change for a Post.
      *
      * @param postId the ID of the Post whose comment count is updated
-     * @param count  the delta to apply (positive or negative)
      */
-    public void queueCommmentCount(Long postId, int count) {
+    public void queueCommmentCount(Long postId) {
         // Record to redis for updating reply count.
-        String json = CacheTools.toJson(new ReplyCountDTO(postId, count));
         redis.opsForHash()
-                .put(REDIS_REPLY_COUNT_KEY, postId.toString(), json);
-        log.info("📦 Redis | Post comment count - {} → {}", postId, count);
+                .put(REDIS_REPLY_COUNT_KEY, postId.toString(), postId.toString());
+        log.info("📦 Redis | Post comment count - {}", postId);
     }
 
     /**
@@ -134,16 +129,14 @@ public class PostRedisService {
             Post newPost = CacheTools.fromJson(json, Post.class);
             newPost.setId(null);
             toSave.add(newPost);
+            log.info("Saved {} post(s)", createdKeys.size());
         }
-
         // Process updated posts
         Set<Object> updatedKeys = redis.opsForHash().keys(REDIS_UPDATE_KEY);
         for (Object key : updatedKeys) {
             String json = (String) redis.opsForHash().get(REDIS_UPDATE_KEY, key);
             toSave.add(CacheTools.fromJson(json, Post.class));
-        }
-        if (!updatedKeys.isEmpty()) {
-            log.info("Processing {} updated post(s)", updatedKeys.size());
+            log.info("Updated {} post(s)", updatedKeys.size());
         }
 
         // Return early if nothing to save
@@ -153,21 +146,13 @@ public class PostRedisService {
         }
 
         // Save all and clean up Redis
-        try {
-            postRepository.saveAll(toSave);
-            // Clean up Redis only after successful save
-            if (!createdKeys.isEmpty()) {
-                redis.opsForHash().delete(REDIS_CREATE_KEY, createdKeys.toArray());
-            }
-            if (!updatedKeys.isEmpty()) {
-                redis.opsForHash().delete(REDIS_UPDATE_KEY, updatedKeys.toArray());
-            }
-            log.info("Successfully flushed {} pending post(s) to database", toSave.size());
-        } catch (Exception e) {
-            log.error("Failed to flush {} pending post(s)", toSave.size(), e);
-            throw e; // Re-throw since method is @Transactional
+        postRepository.saveAll(toSave);
+        if (!createdKeys.isEmpty()) {
+            redis.opsForHash().delete(REDIS_CREATE_KEY, createdKeys.toArray());
         }
-
+        if (!updatedKeys.isEmpty()) {
+            redis.opsForHash().delete(REDIS_UPDATE_KEY, updatedKeys.toArray());
+        }
         log.info("Successfully flushed {} pending post(s) to database", toSave.size());
     }
 
@@ -215,14 +200,11 @@ public class PostRedisService {
         log.info("Flushing {} pending comment count operations", processedKeys.size());
 
         // Aggregate and apply updates in one operation
-        processedKeys.stream()
+        Set<Long> postIds = processedKeys.stream()
                 .map(k -> (String) redis.opsForHash().get(REDIS_REPLY_COUNT_KEY, k))
-                .map(json -> CacheTools.fromJson(json, ReplyCountDTO.class))
-                .collect(Collectors.toMap(
-                        ReplyCountDTO::id,
-                        ReplyCountDTO::count,
-                        Integer::sum))
-                .forEach(postRepository::updatePostCommentCount);
+                .map(Long::parseLong)
+                .collect(Collectors.toSet());
+        postRepository.updatePostCommentCount(postIds);
 
         // Clear processed entries
         if (!processedKeys.isEmpty()) {

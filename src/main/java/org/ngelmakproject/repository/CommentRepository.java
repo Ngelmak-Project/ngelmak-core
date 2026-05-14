@@ -3,6 +3,7 @@ package org.ngelmakproject.repository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.ngelmakproject.domain.Comment;
 import org.ngelmakproject.repository.projection.CommentProjection;
@@ -103,26 +104,111 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 	@Modifying
 	@Query("""
 			UPDATE Comment c
-			SET c.replyCount = (SELECT COUNT(c.id) FROM Comment c2
-			WHERE c2.replyTo.id = c.id)
-			""")
-	void updateAllReplyCounts();
-
-	@Modifying
-	@Query("""
-			  UPDATE Comment c
-			  SET c.replyCount=(SELECT COUNT(c.id) FROM Comment c2
-			  WHERE c2.replyTo.id = :commentId)
-			""")
-	void updateReplyCount(@Param("commentId") Long commentId);
-
-	@Modifying
-	@Query("""
-			UPDATE Comment c
 			SET c.replyCount = GREATEST(0, c.replyCount + :countChange)
 			WHERE c.id = :commentId
 			""")
-	void updateReplyCount(@Param("commentId") Long commentId, @Param("countChange") Integer countChange);
+	void updateReplyCount(@Param("commentId") Long commentId, @Param("countChange") Long countChange);
+
+	/**
+	 * <p>
+	 * Recalculates and updates the display reply count for all comments.
+	 * 
+	 * The reply count is determined by counting non-deleted replies that directly
+	 * reference each comment via the {@code replyTo} relationship.
+	 * 
+	 * This operation performs a single bulk update across all comments in the
+	 * database.
+	 * Soft-deleted replies (where deletedAt is not null) are excluded from the
+	 * count.
+	 * 
+	 * Use this when performing a full synchronization of reply counts.
+	 */
+	@Modifying
+	@Query("""
+			UPDATE Comment c
+			SET c.replyCount = (
+				SELECT COUNT(c2.id) FROM Comment c2
+				WHERE c2.replyTo.id = c.id AND c2.deletedAt IS NULL
+			)
+			""")
+	void updateAllReplyCounts();
+
+	/**
+	 * <p>
+	 * Recalculates and updates the display reply count for a specific comment.
+	 * 
+	 * The reply count is determined by counting non-deleted replies that directly
+	 * reference this comment via the {@code replyTo} relationship.
+	 * 
+	 * Soft-deleted replies (where deletedAt is not null) are excluded from the
+	 * count.
+	 * 
+	 * @param commentId the ID of the comment whose reply count should be
+	 *                  recalculated
+	 */
+	@Modifying
+	@Query("""
+			UPDATE Comment c
+			SET c.replyCount = (
+				SELECT COUNT(c2.id) FROM Comment c2
+				WHERE c2.replyTo.id = :commentId AND c2.deletedAt IS NULL
+			)
+			WHERE c.id = :commentId
+			""")
+	void updateReplyCount(@Param("commentId") Long commentId);
+
+	/**
+	 * <p>
+	 * Recalculates and updates the display reply count for the given comments.
+	 * 
+	 * The reply count is determined by counting non-deleted replies that directly
+	 * reference this comment via the {@code replyTo} relationship.
+	 * 
+	 * This operation performs a single bulk update in the database, making it
+	 * efficient for batch recalculations. Soft-deleted replies (where deletedAt
+	 * is not null) are excluded from the count.
+	 * 
+	 * @param commentIds the IDs of comments whose reply counts should be
+	 *                   recalculated
+	 */
+	@Modifying
+	@Query("""
+			UPDATE Comment c
+			SET c.replyCount = (
+				SELECT COUNT(c2.id) FROM Comment c2
+				WHERE c2.replyTo.id = c.id AND c2.deletedAt IS NULL
+			)
+			WHERE c.id IN :commentIds
+			""")
+	void updateReplyCount(@Param("commentIds") Set<Long> commentIds);
+
+	/**
+	 * Recalculates and updates the display reply count for all comments that have
+	 * direct replies in the given set of deleted reply IDs.
+	 * 
+	 * When a reply is deleted, this method identifies its parent comment(s) via the
+	 * {@code replyTo} relationship and recalculates their reply counts, excluding
+	 * soft-deleted replies (where deletedAt is not null).
+	 * 
+	 * This is useful in delete workflows where you only have the IDs of the deleted
+	 * replies and need to update the reply counts of their parent comments in a
+	 * single bulk operation.
+	 * 
+	 * @param replyIds the IDs of replies that were deleted, used to find their
+	 *                 parent comments
+	 */
+	@Modifying
+	@Query("""
+			UPDATE Comment c
+			SET c.displayReplyCount = (
+				SELECT COUNT(c2.id) FROM Comment c2
+				WHERE c2.replyTo.id = c.id AND c2.deletedAt IS NULL
+			)
+			WHERE c.id IN (
+				SELECT c2.replyTo.id FROM Comment c2 WHERE c2.id IN :replyIds
+			)
+			""")
+	void updateReplyCountByReplyIds(@Param("replyIds") Set<Long> replyIds);
 
 	@Modifying
 	@Query("UPDATE Comment c SET c.deletedAt = :ts WHERE c.id = :id")
@@ -130,13 +216,13 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 
 	@Modifying
 	@Query("UPDATE Comment c SET c.deletedAt = :ts WHERE c.id IN :ids")
-	int softDeleteByIds(List<Long> ids, @Param("ts") Instant ts);
+	int softDeleteByIds(Set<Long> ids, @Param("ts") Instant ts);
 
 	@Modifying
 	@Query("""
-			    UPDATE Comment c
-			    SET c.deletedAt = :ts
-			    WHERE c.id = :id AND c.channel.id = :channelId
+			UPDATE Comment c
+			SET c.deletedAt = :ts
+			WHERE c.id = :id AND c.channel.id = :channelId
 			""")
 	int softDeleteByIdAndChannel(@Param("id") Long id, @Param("channelId") Long channelId, @Param("ts") Instant ts);
 
