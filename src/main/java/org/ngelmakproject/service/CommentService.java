@@ -90,7 +90,7 @@ public class CommentService {
                 .file(savedFiles.stream().findFirst().orElse(null))
                 .channel(channel);
         // Update counters (post or parent comment)
-        if (comment.getPost() != null && comment.getReplyTo() == null) {
+        if (comment.getPost() == null && comment.getReplyTo() == null) {
             throw new BadRequestAlertException(
                     "A comment must refer to either a Post or another Comment.",
                     ENTITY_NAME,
