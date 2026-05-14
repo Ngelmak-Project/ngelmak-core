@@ -148,11 +148,34 @@ public class CommentResource {
         return ResponseEntity.ok().body(PageDTO.from(page));
     }
 
+    /**
+     * GET /reply/{id} : Retrieve all replies for a given comment.
+     *
+     * <p>
+     * This endpoint optionally receives the reply count currently stored on the
+     * client side (storedReplyCount). The backend compares this value with the
+     * actual number of replies found in the database. If a mismatch is detected,
+     * the backend may schedule a background repair task (e.g., via Redis) to
+     * correct the stored replyCount for the comment.
+     * </p>
+     *
+     * @param id               the ID of the parent comment whose replies should be
+     *                         returned
+     * @param storedReplyCount the reply count known by the client (optional).
+     *                         Defaults to -1, meaning "no consistency check".
+     *
+     * @return a list of CommentDTO representing the replies of the given comment
+     */
     @GetMapping("/reply/{id}")
-    public ResponseEntity<List<CommentDTO>> getRepliesByComment(@PathVariable Long id,
+    public ResponseEntity<List<CommentDTO>> getRepliesByComment(
+            @PathVariable Long id,
             @RequestParam(required = false, defaultValue = "-1") Integer storedReplyCount) {
-        log.debug("REST request to get Comments of Post id : {} | With stored reply count: {}", id, storedReplyCount);
-        return ResponseEntity.ok().body(commentService.findRepliesByComment(id, storedReplyCount));
+
+        log.debug("REST request to get replies of comment id={} | storedReplyCount={}",
+                id, storedReplyCount);
+
+        return ResponseEntity.ok().body(
+                commentService.findRepliesByComment(id, storedReplyCount));
     }
 
     /**
