@@ -26,8 +26,8 @@ public class File implements Serializable {
     private static final long serialVersionUID = 1L;
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sequenceGenerator")
-    @SequenceGenerator(name = "sequenceGenerator")
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "file_seq")
+    @SequenceGenerator(name = "file_seq", sequenceName = "file_seq", allocationSize = 50)
     @Column(name = "id")
     private Long id;
 

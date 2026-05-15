@@ -1,5 +1,7 @@
 package org.ngelmakproject.domain;
 
+import java.io.Serializable;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -13,19 +15,16 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 @Entity
-@Table(
-    name = "nk_reaction",
-    uniqueConstraints = {
-        @UniqueConstraint(
-            name = "uk_reaction_post_channel",
-            columnNames = {"post_id", "channel_id"}
-        )
-    }
-)
-public class Reaction {
+@Table(name = "nk_reaction", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_reaction_post_channel", columnNames = { "post_id", "channel_id" })
+})
+public class Reaction implements Serializable {
+
+    private static final long serialVersionUID = 1L;
+
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sequenceGenerator")
-    @SequenceGenerator(name = "sequenceGenerator")
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "reaction_seq")
+    @SequenceGenerator(name = "reaction_seq", sequenceName = "reaction_seq", allocationSize = 50)
     @Column(name = "id")
     private Long id;
 

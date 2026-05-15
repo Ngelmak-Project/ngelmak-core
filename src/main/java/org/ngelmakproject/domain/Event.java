@@ -31,11 +31,12 @@
 // @JsonIgnoreProperties(ignoreUnknown = true)
 // public class Event {
 
-//     @Id
-//     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sequenceGenerator")
-//     @SequenceGenerator(name = "sequenceGenerator")
-//     @Column(name = "id")
-//     private Long id;
+// @Id
+// @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "event_seq")
+// @SequenceGenerator(name = "event_seq", sequenceName = "event_seq", allocationSize = 50)
+// @Column(name = "id")
+// private Long id;
+
 
 //     @Column(name = "title", nullable = false, length = 255)
 //     private String title;

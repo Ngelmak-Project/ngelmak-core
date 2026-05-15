@@ -36,8 +36,8 @@ public class Post implements Serializable {
     private static final long serialVersionUID = 1L;
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sequenceGenerator")
-    @SequenceGenerator(name = "sequenceGenerator")
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "post_seq")
+    @SequenceGenerator(name = "post_seq", sequenceName = "post_seq", allocationSize = 50)
     @Column(name = "id")
     private Long id;
 
@@ -60,7 +60,8 @@ public class Post implements Serializable {
 
     @Column(name = "content", columnDefinition = "TEXT", nullable = false)
     @Size(max = 10000)
-    private String content; /** The content of the post. */
+    private String content;
+    /** The content of the post. */
 
     @NotNull
     @Enumerated(EnumType.STRING)

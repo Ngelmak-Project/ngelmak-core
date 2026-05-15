@@ -17,8 +17,8 @@ import jakarta.persistence.Table;
 public class Location {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sequenceGenerator")
-    @SequenceGenerator(name = "sequenceGenerator")
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "location_seq")
+    @SequenceGenerator(name = "location_seq", sequenceName = "location_seq", allocationSize = 50)
     @Column(name = "id")
     private Long id;
 
