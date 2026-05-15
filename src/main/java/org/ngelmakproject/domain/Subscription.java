@@ -17,7 +17,7 @@ import jakarta.persistence.Table;
  * A Subscription.
  */
 @Entity
-@Table(name = "nk_subscription")
+@Table(name = "subscription")
 public class Subscription implements Serializable {
     private static final long serialVersionUID = 1L;
 

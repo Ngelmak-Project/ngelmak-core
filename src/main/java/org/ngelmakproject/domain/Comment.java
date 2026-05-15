@@ -23,7 +23,7 @@ import jakarta.validation.constraints.Size;
  * A Comment.
  */
 @Entity
-@Table(name = "nk_comment")
+@Table(name = "comment")
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Comment implements Serializable {
 

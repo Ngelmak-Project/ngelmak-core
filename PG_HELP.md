@@ -12,7 +12,7 @@ Feed retrieval relies on timestamp‑based filtering. PostgreSQL must be able to
 ### 2.1 Timestamp Index
 
 ```bash
-CREATE INDEX idx_nk_post_at ON nk_post (at DESC);
+CREATE INDEX idx_post_at ON post (at DESC);
 ```
 
 This index supports:
@@ -24,8 +24,8 @@ This index supports:
 ### 2.2 Composite Index (Optional)
 
 ```bash
-CREATE INDEX idx_nk_post_at_comment
-ON nk_post (at DESC, comment_count DESC);
+CREATE INDEX idx_post_at_comment
+ON post (at DESC, comment_count DESC);
 ```
 
 Useful when scoring incorporates both recency and engagement metrics.
@@ -33,8 +33,8 @@ Useful when scoring incorporates both recency and engagement metrics.
 ### 2.3 Partial Index (Optional)
 
 ```bash
-CREATE INDEX idx_nk_post_recent
-ON nk_post (at DESC)
+CREATE INDEX idx_post_recent
+ON post (at DESC)
 WHERE at >= NOW() - INTERVAL '30 days';
 ```
 
@@ -44,7 +44,7 @@ Reduces index size when the feed window is restricted to recent posts.
 
 A correctly optimized feed query typically shows:
 
-- `Index Scan Backward` on `idx_nk_post_at`
+- `Index Scan Backward` on `idx_post_at`
 - Low heap block reads
 - No sequential scan
 - Fast termination due to `LIMIT`
@@ -52,7 +52,7 @@ A correctly optimized feed query typically shows:
 Example:
 
 ```
-Index Scan Backward using idx_nk_post_at on nk_post
+Index Scan Backward using idx_post_at on post
   Filter: (at >= $1)
   Rows Removed by Filter: ...
 ```
@@ -72,7 +72,7 @@ The configuration includes:
 ### 3.1 Search Vector Column
 
 ```bash
-ALTER TABLE nk_post
+ALTER TABLE post
 ADD COLUMN textsearchable_index_col tsvector
 GENERATED ALWAYS AS (
     setweight(to_tsvector('french', content), 'A')
@@ -84,7 +84,7 @@ GENERATED ALWAYS AS (
 Or if the `keywords` is used :
 
 ```bash
-ALTER TABLE nk_post
+ALTER TABLE post
 ADD COLUMN textsearchable_index_col tsvector
 GENERATED ALWAYS AS (
     setweight(to_tsvector('french', content), 'A') ||
@@ -95,8 +95,8 @@ GENERATED ALWAYS AS (
 ### 3.2 GIN Index
 
 ```bash
-CREATE INDEX nk_post_textsearch_idx
-ON nk_post USING GIN (textsearchable_index_col);
+CREATE INDEX post_textsearch_idx
+ON post USING GIN (textsearchable_index_col);
 ```
 
 ### 3.3 Query Behavior
@@ -107,7 +107,7 @@ Queries using:
 SELECT id,
        content,
        ts_rank_cd(textsearchable_index_col, query) AS rank
-FROM nk_post,
+FROM post,
      websearch_to_tsquery('french', 'hello') AS query
 WHERE status = 'VALIDATED'
   AND textsearchable_index_col @@ query
@@ -115,7 +115,7 @@ ORDER BY rank DESC
 LIMIT 10;
 ```
 
-- **Bitmap Index Scan** using `nk_post_textsearch_idx`
+- **Bitmap Index Scan** using `post_textsearch_idx`
 - **Bitmap Heap Scan** to load the matching rows
 - **Relevance ranking** computed with `ts_rank_cd`
 
@@ -126,7 +126,7 @@ EXPLAIN ANALYZE
 SELECT id,
        content,
        ts_rank_cd(textsearchable_index_col, query) AS rank
-FROM nk_post,
+FROM post,
      websearch_to_tsquery('french', 'hello') AS query
 WHERE status = 'VALIDATED'
   AND textsearchable_index_col @@ query
@@ -135,8 +135,8 @@ LIMIT 10;
 ```
 
 ```bash
-Bitmap Index Scan on nk_post_textsearch_idx
-Bitmap Heap Scan on nk_post
+Bitmap Index Scan on post_textsearch_idx
+Bitmap Heap Scan on post
 Sort by ts_rank_cd DESC
 Limit 10
 Planning Time: 0.147 ms
@@ -154,7 +154,7 @@ Hydration, channel resolution, and reaction aggregation occur in the application
 
 ```bash
 SELECT p.id
-FROM nk_post p,
+FROM post p,
         websearch_to_tsquery('french', :fullText) AS query
 WHERE p.status = 'VALIDATED'
     AND p.textsearchable_index_col @@ query
@@ -181,7 +181,7 @@ public interface PostSearchRepository {
     @Query(
     value = """
         SELECT p.id
-        FROM nk_post p,
+        FROM post p,
              websearch_to_tsquery('french', :fullText) AS query
         WHERE p.status = 'VALIDATED'
           AND p.textsearchable_index_col @@ query

@@ -145,25 +145,6 @@ public class PostResource {
                 .body(page);
     }
 
-    // /**
-    // * {@code GET /posts/search?q=} : search posts that match the query.
-    // *
-    // * @param pageable the pagination information.
-    // * @return the {@link ResponseEntity} with status {@code 200 (OK)} and the
-    // list
-    // * of posts in body.
-    // */
-    // @GetMapping("/search")
-    // public ResponseEntity<PageDTO<Post>> fullTextSearch(@RequestParam("q")
-    // String
-    // query,
-    // Pageable pageable) {
-    // log.debug("REST request to search Post : {}", query);
-    // return ResponseEntity.ok().cacheControl(CacheControl.maxAge(60,
-    // TimeUnit.SECONDS))
-    // .body(postService.fullTextSearch(query, pageable));
-    // }
-
     /**
      * {@code GET  /feeds?q=} : retrieve the feed of the connected user, with
      * optional search query.

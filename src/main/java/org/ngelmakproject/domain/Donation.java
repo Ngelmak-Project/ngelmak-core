@@ -15,7 +15,7 @@ import jakarta.persistence.Table;
  * The Donation entity.
  */
 @Entity
-@Table(name = "nk_donation")
+@Table(name = "donation")
 public class Donation implements Serializable {
 
     private static final long serialVersionUID = 1L;

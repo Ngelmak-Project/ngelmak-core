@@ -37,15 +37,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	@Query("SELECT p FROM Post p WHERE p.deletedAt < :cutoff")
 	List<PostProjection> findExpiredPosts(Instant cutoff);
 
-	// @Query("""
-	// SELECT pf.file.id FROM
-	// Post p
-	// LEFT JOIN
-	// FETCH p.files pf
-	// WHERE p.deletedAt<:cutoff
-	// """)
-	// List<Long> findFileIdsForExpiredPosts(Instant cutoff);
-
 	@Query(value = """
 			SELECT p.*,
 			(
@@ -53,7 +44,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			(LEAST(p.comment_count, 20) * 0.2) +
 			((hashtext(CONCAT(:sessionKey, '-', p.id)) % 1000) / 1000.0 * 300)
 			) AS score
-			FROM nk_post p
+			FROM post p
 			WHERE p.created_at >= :windowStart
 			ORDER BY score DESC
 			LIMIT :limit OFFSET :offset
@@ -87,11 +78,11 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			    ((hashtext(CONCAT(:sessionKey, '-', p.id)) % 1000) / 1000.0 * 100.0)
 			)
 			AS score
-			FROM nk_post p
-			LEFT JOIN nk_channel c ON c.id = p.channel_id
-			LEFT JOIN nk_post r ON r.post_reply_id = p.id
-			LEFT JOIN nk_post_file pf ON pf.post_id = p.id
-			LEFT JOIN nk_file f ON f.id = pf.file_id
+			FROM post p
+			LEFT JOIN channel c ON c.id = p.channel_id
+			LEFT JOIN post r ON r.post_reply_id = p.id
+			LEFT JOIN post_file pf ON pf.post_id = p.id
+			LEFT JOIN file f ON f.id = pf.file_id
 			WHERE p.at >= CAST(:windowStart AS TIMESTAMP)
 			ORDER BY score DESC
 			LIMIT :limit OFFSET :offset
@@ -122,7 +113,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			        EXTRACT(EPOCH FROM :windowStart) AS window_epoch
 			)
 			SELECT p.id
-			FROM nk_post p
+			FROM post p
 			CROSS JOIN params
 			WHERE p.at >= :windowStart
 			ORDER BY (
@@ -158,7 +149,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	 */
 	@Query(value = """
 			SELECT p.id
-			FROM nk_post p
+			FROM post p
 			WHERE p.at >= TO_TIMESTAMP(:windowStartEpoch)
 			ORDER BY (
 			        (
@@ -199,7 +190,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			        EXTRACT(EPOCH FROM :windowStart) AS window_epoch
 			)
 			SELECT p.id
-			FROM nk_post p
+			FROM post p
 			CROSS JOIN params
 			WHERE p.at >= :windowStart
 			ORDER BY (
@@ -232,11 +223,11 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	 */
 	@Query(value = """
 			SELECT p.id
-			FROM nk_post p,
+			FROM post p,
 			    websearch_to_tsquery('french', :fullText) AS query
 			WHERE p.status = 'VALIDATED'
 			    AND p.textsearchable_index_col @@ query
-			ORDER BY ts_rank_cd(p.textsearchable_index_col, query) DESC
+			ORDER BY ts_racd(p.textsearchable_index_col, query) DESC
 			LIMIT :limit OFFSET :offset
 			""", nativeQuery = true)
 	List<Long> searchFullText(
@@ -381,7 +372,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	 * This is useful for batch recalculations when you have multiple post IDs that
 	 * need their comment counts synchronized in a single bulk operation.
 	 * 
-	 * Index Usage: {@code nk_comment(post_id, deletedAt)} enables efficient
+	 * Index Usage: {@code comment(post_id, deletedAt)} enables efficient
 	 * filtering
 	 * of comments per post while excluding soft-deleted entries.
 	 * 
@@ -433,7 +424,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	 * affected comments and need to update their post's comment counts in a single
 	 * bulk operation.
 	 * 
-	 * Index Usage: {@code nk_comment(post_id, deletedAt)} enables efficient
+	 * Index Usage: {@code comment(post_id, deletedAt)} enables efficient
 	 * filtering
 	 * of comments per post while excluding soft-deleted entries.
 	 * 
@@ -442,14 +433,14 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	 */
 	@Modifying
 	@Query("""
-			    UPDATE Post p
-			    SET p.commentCount = (
-			        SELECT COUNT(c.id) FROM Comment c
-			        WHERE c.post.id = p.id AND c.deletedAt IS NULL
-			    )
-			    WHERE p.id IN (
-			        SELECT c.post.id FROM Comment c WHERE c.id IN :commentIds
-			    )
+			UPDATE Post p
+			SET p.commentCount = (
+				SELECT COUNT(c.id) FROM Comment c
+				WHERE c.post.id = p.id AND c.deletedAt IS NULL
+			)
+			WHERE p.id IN (
+				SELECT c.post.id FROM Comment c WHERE c.id IN :commentIds
+			)
 			""")
 	void updatePostCommentCountByCommentIds(@Param("commentIds") Set<Long> commentIds);
 

@@ -155,7 +155,7 @@ Some time we might be in case where data are imported from `csv` file. Importing
 To avoid that we can update the sequence as fellow:
 
 ```
-SELECT setval('serial', max(id)) FROM nk_comment;
+SELECT setval('serial', max(id)) FROM comment;
 ```
 
 ## Full Text Search
@@ -183,10 +183,10 @@ So, let's implement our full text search.
 
 ### Creating indexes
 
-We will first create some indexes to speed up text searches. In our case indexes will be on table `nk_channel` to target `name` and `nk_post` with `title`, `content`, `keywords`.
+We will first create some indexes to speed up text searches. In our case indexes will be on table `channel` to target `name` and `post` with `title`, `content`, `keywords`.
 
 ```
-ALTER TABLE nk_post
+ALTER TABLE post
     ADD COLUMN textsearchable_index_col tsvector
                GENERATED ALWAYS AS (
                     setweight(to_tsvector('french', title), 'A') || '' ||
@@ -199,16 +199,16 @@ With that only `WHERE to_tsvector('french', content) @@ 'a & b'` will use the in
 Then we create a GIN index to speed up the search:
 
 ```
-CREATE INDEX nk_post_textsearch_idx ON nk_post USING GIN (textsearchable_index_col);
-CREATE INDEX nk_post_status_idx ON nk_post (status);
+CREATE INDEX post_textsearch_idx ON post USING GIN (textsearchable_index_col);
+CREATE INDEX post_status_idx ON post (status);
 ```
-Note that we create `nk_post_status_idx` index to filter out posts that are not validated while avoiding loading all the table.
+Note that we create `post_status_idx` index to filter out posts that are not validated while avoiding loading all the table.
 
 Now let's perform a test to make sure that everything is fine:
 ```
 EXPLAIN ANALYZE
 SELECT title, ts_rank_cd(textsearchable_index_col, query) AS rank
-FROM nk_post, websearch_to_tsquery('vestigium') query
+FROM post, websearch_to_tsquery('vestigium') query
 WHERE status = 'VALIDATED' AND textsearchable_index_col @@ query
 ORDER BY rank DESC
 LIMIT 10;
@@ -218,17 +218,17 @@ The query plan output is :
 ```
 Limit  (cost=22.70..22.71 rows=1 width=22) (actual time=0.238..0.244 rows=6 loops=1)
   ->  Sort  (cost=22.70..22.71 rows=1 width=22) (actual time=0.236..0.240 rows=6 loops=1)
-        Sort Key: (ts_rank_cd(nk_post.textsearchable_index_col, query.query)) DESC
+        Sort Key: (ts_rank_cd(post.textsearchable_index_col, query.query)) DESC
         Sort Method: quicksort  Memory: 25kB
         ->  Nested Loop  (cost=18.66..22.69 rows=1 width=22) (actual time=0.187..0.224 rows=6 loops=1)
               ->  Function Scan on websearch_to_tsquery query  (cost=0.25..0.26 rows=1 width=32) (actual time=0.063..0.064 rows=1 loops=1)
-              ->  Bitmap Heap Scan on nk_post  (cost=18.41..22.42 rows=1 width=50) (actual time=0.110..0.131 rows=6 loops=1)
+              ->  Bitmap Heap Scan on post  (cost=18.41..22.42 rows=1 width=50) (actual time=0.110..0.131 rows=6 loops=1)
                     Recheck Cond: (((status)::text = 'VALIDATED'::text) AND (textsearchable_index_col @@ query.query))
                     Heap Blocks: exact=6
                     ->  BitmapAnd  (cost=18.41..18.41 rows=1 width=0) (actual time=0.093..0.094 rows=0 loops=1)
-                          ->  Bitmap Index Scan on nk_post_status_idx  (cost=0.00..6.05 rows=236 width=0) (actual time=0.042..0.042 rows=236 loops=1)
+                          ->  Bitmap Index Scan on post_status_idx  (cost=0.00..6.05 rows=236 width=0) (actual time=0.042..0.042 rows=236 loops=1)
                                 Index Cond: ((status)::text = 'VALIDATED'::text)
-                          ->  Bitmap Index Scan on nk_post_textsearch_idx  (cost=0.00..12.05 rows=7 width=0) (actual time=0.031..0.031 rows=42 loops=1)
+                          ->  Bitmap Index Scan on post_textsearch_idx  (cost=0.00..12.05 rows=7 width=0) (actual time=0.031..0.031 rows=42 loops=1)
                                 Index Cond: (textsearchable_index_col @@ query.query)
 Planning Time: 0.295 ms
 Execution Time: 0.309 ms
@@ -236,10 +236,10 @@ Execution Time: 0.309 ms
 
 ---
 
-Now let's move to channel as we would like also the query to consider the `nk_channel`.
+Now let's move to channel as we would like also the query to consider the `channel`.
 
 ```
-ALTER TABLE nk_channel
+ALTER TABLE channel
     ADD COLUMN textsearchable_index_col tsvector
                GENERATED ALWAYS AS (
                     setweight(to_tsvector('french', name), 'A')
@@ -249,13 +249,13 @@ ALTER TABLE nk_channel
 Then we create a GIN index to speed up the search:
 
 ```
-CREATE INDEX nk_channel_textsearch_idx ON nk_channel USING GIN (textsearchable_index_col);
+CREATE INDEX channel_textsearch_idx ON channel USING GIN (textsearchable_index_col);
 ```
 
 ```
 EXPLAIN ANALYZE
 SELECT id, ts_rank_cd(textsearchable_index_col, query) AS rank
-FROM nk_channel, websearch_to_tsquery('vestigium') query
+FROM channel, websearch_to_tsquery('vestigium') query
 WHERE textsearchable_index_col @@ query
 ORDER BY rank DESC;
 LIMIT 10;
@@ -269,11 +269,11 @@ Now we can put all together and check if everything is fine :
 EXPLAIN ANALYZE
 SELECT p.* FROM (
   SELECT *, ts_rank_cd(textsearchable_index_col, query) AS rank
-  FROM nk_post, websearch_to_tsquery('vestigium') query
+  FROM post, websearch_to_tsquery('vestigium') query
   WHERE status='VALIDATED' AND textsearchable_index_col @@ query
   ) AS p
 LEFT JOIN (SELECT id, ts_rank_cd(textsearchable_index_col, query) AS rank
-FROM nk_post, websearch_to_tsquery('vestigium') query
+FROM post, websearch_to_tsquery('vestigium') query
 WHERE textsearchable_index_col @@ query) AS a
 ON p.channel_id=a.id
 ORDER BY a.rank,p.rank DESC
@@ -283,24 +283,24 @@ LIMIT 100;
 ```
 Limit  (cost=25.63..25.64 rows=1 width=428) (actual time=0.077..0.078 rows=1 loops=1)
   ->  Sort  (cost=25.63..25.64 rows=1 width=428) (actual time=0.076..0.077 rows=1 loops=1)
-        Sort Key: (ts_rank_cd(nk_post_1.textsearchable_index_col, query_1.query)), (ts_rank_cd(nk_post.textsearchable_index_col, query.query)) DESC
+        Sort Key: (ts_rank_cd(post_1.textsearchable_index_col, query_1.query)), (ts_rank_cd(post.textsearchable_index_col, query.query)) DESC
         Sort Method: quicksort  Memory: 27kB
         ->  Nested Loop  (cost=19.18..25.62 rows=1 width=428) (actual time=0.072..0.073 rows=1 loops=1)
-              Join Filter: (nk_post_1.textsearchable_index_col @@ query_1.query)
+              Join Filter: (post_1.textsearchable_index_col @@ query_1.query)
               Rows Removed by Join Filter: 5
               ->  Nested Loop  (cost=18.93..25.35 rows=1 width=452) (actual time=0.050..0.065 rows=6 loops=1)
                     ->  Nested Loop  (cost=18.66..22.69 rows=1 width=420) (actual time=0.047..0.053 rows=6 loops=1)
                           ->  Function Scan on websearch_to_tsquery query  (cost=0.25..0.26 rows=1 width=32) (actual time=0.016..0.016 rows=1 loops=1)
-                          ->  Bitmap Heap Scan on nk_post  (cost=18.41..22.42 rows=1 width=388) (actual time=0.029..0.035 rows=6 loops=1)
+                          ->  Bitmap Heap Scan on post  (cost=18.41..22.42 rows=1 width=388) (actual time=0.029..0.035 rows=6 loops=1)
                                 Recheck Cond: (((status)::text = 'VALIDATED'::text) AND (textsearchable_index_col @@ query.query))
                                 Heap Blocks: exact=6
                                 ->  BitmapAnd  (cost=18.41..18.41 rows=1 width=0) (actual time=0.024..0.025 rows=0 loops=1)
-                                      ->  Bitmap Index Scan on nk_post_status_idx  (cost=0.00..6.05 rows=236 width=0) (actual time=0.010..0.010 rows=236 loops=1)
+                                      ->  Bitmap Index Scan on post_status_idx  (cost=0.00..6.05 rows=236 width=0) (actual time=0.010..0.010 rows=236 loops=1)
                                             Index Cond: ((status)::text = 'VALIDATED'::text)
-                                      ->  Bitmap Index Scan on nk_post_textsearch_idx  (cost=0.00..12.05 rows=7 width=0) (actual time=0.009..0.009 rows=42 loops=1)
+                                      ->  Bitmap Index Scan on post_textsearch_idx  (cost=0.00..12.05 rows=7 width=0) (actual time=0.009..0.009 rows=42 loops=1)
                                             Index Cond: (textsearchable_index_col @@ query.query)
-                    ->  Index Scan using nk_post_pkey on nk_post nk_post_1  (cost=0.28..2.65 rows=1 width=40) (actual time=0.002..0.002 rows=1 loops=6)
-                          Index Cond: (id = nk_post.channel_id)
+                    ->  Index Scan using post_pkey on post post_1  (cost=0.28..2.65 rows=1 width=40) (actual time=0.002..0.002 rows=1 loops=6)
+                          Index Cond: (id = post.channel_id)
               ->  Function Scan on websearch_to_tsquery query_1  (cost=0.25..0.26 rows=1 width=32) (actual time=0.000..0.000 rows=1 loops=6)
 Planning Time: 0.220 ms
 Execution Time: 0.106 ms
@@ -311,11 +311,11 @@ We can create a view from that :
 CREATE VIEW full_text_search_post AS
 SELECT p.* FROM (
   SELECT *, ts_rank_cd(textsearchable_index_col, query) AS rank
-  FROM nk_post, websearch_to_tsquery('vestigium') query
+  FROM post, websearch_to_tsquery('vestigium') query
   WHERE status='VALIDATED' AND textsearchable_index_col @@ query
   ) AS p
 LEFT JOIN (SELECT id, ts_rank_cd(textsearchable_index_col, query) AS rank
-FROM nk_post, websearch_to_tsquery('vestigium') query
+FROM post, websearch_to_tsquery('vestigium') query
 WHERE textsearchable_index_col @@ query) AS a
 ON p.channel_id=a.id
 ORDER BY a.rank,p.rank DESC
@@ -330,18 +330,18 @@ SELECT
 FROM (
   SELECT p.* FROM (
     SELECT *, ts_rank_cd(textsearchable_index_col, query) AS rank
-    FROM nk_post, websearch_to_tsquery('vestigium creator') query
+    FROM post, websearch_to_tsquery('vestigium creator') query
     WHERE status='VALIDATED' AND textsearchable_index_col @@ query
     ) AS p
   LEFT JOIN (SELECT id, ts_rank_cd(textsearchable_index_col, query) AS rank
-  FROM nk_post, websearch_to_tsquery('vestigium creator') query
+  FROM post, websearch_to_tsquery('vestigium creator') query
   WHERE textsearchable_index_col @@ query) AS a
   ON p.channel_id=a.id
   ORDER BY a.rank,p.rank DESC
   LIMIT 100
 ) AS full_search
-LEFT JOIN nk_post AS p ON full_search.post_reference_id = p.id
-LEFT JOIN nk_channel AS a ON a.id = p.channel_id;
+LEFT JOIN post AS p ON full_search.post_reference_id = p.id
+LEFT JOIN channel AS a ON a.id = p.channel_id;
 ```
 
 ## Getting started with PostgreSQL (linux teminal only)
@@ -409,7 +409,7 @@ The feed query begins with:
 WHERE p.at >= :windowStart
 ```
 
-This is a **range filter** on a timestamp column. Without an index, PostgreSQL must scan the entire `nk_post` table, which becomes prohibitively slow as the table grows.
+This is a **range filter** on a timestamp column. Without an index, PostgreSQL must scan the entire `post` table, which becomes prohibitively slow as the table grows.
 
 A proper index allows PostgreSQL to:
 
@@ -428,7 +428,7 @@ This is the single most important optimization for the feed.
 This is the core index that makes the feed query fast.
 
 ```sql
-CREATE INDEX idx_nk_post_at ON nk_post (at DESC);
+CREATE INDEX idx_post_at ON post (at DESC);
 ```
 
 ### Why descending?
@@ -447,8 +447,8 @@ Most feeds show **recent posts first**, and PostgreSQL can traverse a descending
 If your table contains millions of rows, adding `comment_count` helps PostgreSQL reduce heap fetches during scoring.
 
 ```sql
-CREATE INDEX idx_nk_post_at_comment
-    ON nk_post (at DESC, comment_count DESC);
+CREATE INDEX idx_post_at_comment
+    ON post (at DESC, comment_count DESC);
 ```
 
 ### Why this helps
@@ -460,8 +460,8 @@ Although the scoring formula cannot be indexed directly, including `comment_coun
 If your feed window is always something like “last 7–30 days”, a partial index is dramatically faster and smaller.
 
 ```sql
-CREATE INDEX idx_nk_post_recent
-    ON nk_post (at DESC)
+CREATE INDEX idx_post_recent
+    ON post (at DESC)
     WHERE at >= NOW() - INTERVAL '30 days';
 ```
 
@@ -482,7 +482,7 @@ Run:
 ```sql
 EXPLAIN ANALYZE
 SELECT p.id
-FROM nk_post p
+FROM post p
 WHERE p.at >= NOW() - INTERVAL '7 days'
 ORDER BY p.at DESC
 LIMIT 50;
@@ -490,7 +490,7 @@ LIMIT 50;
 
 Look for:
 
-- `Index Scan using idx_nk_post_at`
+- `Index Scan using idx_post_at`
 - Low `Rows Removed by Filter`
 - Low `Heap Fetches`
 
@@ -523,9 +523,9 @@ The smaller the window, the fewer rows PostgreSQL must score.
 
 | Goal | Index |
 |------|--------|
-| Fast filtering by timestamp | `CREATE INDEX idx_nk_post_at ON nk_post(at DESC);` |
-| Improve scoring performance | `CREATE INDEX idx_nk_post_at_comment ON nk_post(at DESC, comment_count DESC);` |
-| Optimize for recent-only feed | `CREATE INDEX idx_nk_post_recent ON nk_post(at DESC) WHERE at >= NOW() - INTERVAL '30 days';` |
+| Fast filtering by timestamp | `CREATE INDEX idx_post_at ON post(at DESC);` |
+| Improve scoring performance | `CREATE INDEX idx_post_at_comment ON post(at DESC, comment_count DESC);` |
+| Optimize for recent-only feed | `CREATE INDEX idx_post_recent ON post(at DESC) WHERE at >= NOW() - INTERVAL '30 days';` |
 
 The **primary index on `at`** is mandatory.  
 The others are optional optimizations depending on your workload.

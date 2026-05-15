@@ -19,7 +19,7 @@ import jakarta.validation.constraints.NotNull;
  * The Channel entity.
  */
 @Entity
-@Table(name = "nk_channel")
+@Table(name = "channel")
 @SuppressWarnings("common-java:DuplicatedBlocks")
 public class Channel implements Serializable {
 

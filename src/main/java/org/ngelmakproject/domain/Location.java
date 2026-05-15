@@ -12,7 +12,7 @@ import jakarta.persistence.Table;
  * The Location entity.
  */
 @Entity
-@Table(name = "nk_location")
+@Table(name = "location")
 @SuppressWarnings("common-java:DuplicatedBlocks")
 public class Location {
 

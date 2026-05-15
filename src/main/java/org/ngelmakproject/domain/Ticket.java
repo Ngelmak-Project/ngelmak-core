@@ -22,7 +22,7 @@ import jakarta.validation.constraints.NotNull;
  * A Ticket.
  */
 @Entity
-@Table(name = "nk_ticket")
+@Table(name = "ticket")
 @SuppressWarnings("common-java:DuplicatedBlocks")
 public class Ticket implements Serializable {
 

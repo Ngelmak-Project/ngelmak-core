@@ -20,7 +20,7 @@ import jakarta.persistence.Table;
  * A File.
  */
 @Entity
-@Table(name = "nk_file")
+@Table(name = "file")
 public class File implements Serializable {
 
     private static final long serialVersionUID = 1L;

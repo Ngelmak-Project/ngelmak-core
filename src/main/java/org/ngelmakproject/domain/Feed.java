@@ -23,7 +23,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "nk_feed")
+@Table(name = "feed")
 public class Feed implements Serializable {
 
     private static final long serialVersionUID = 1L;

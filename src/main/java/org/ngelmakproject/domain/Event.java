@@ -27,7 +27,7 @@
 //  * An Event.
 //  */
 // @Entity
-// @Table(name = "nk_event")
+// @Table(name = "event")
 // @JsonIgnoreProperties(ignoreUnknown = true)
 // public class Event {
 

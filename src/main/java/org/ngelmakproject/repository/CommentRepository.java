@@ -59,10 +59,10 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 
 	@Query(value = """
 			SELECT c.*
-			FROM nk_post p
+			FROM post p
 			JOIN LATERAL (
 			    SELECT *
-			    FROM nk_comment c
+			    FROM comment c
 			    WHERE c.post_id = p.id
 			    ORDER BY c.at DESC
 			    LIMIT :limit

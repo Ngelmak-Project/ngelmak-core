@@ -9,7 +9,7 @@
         <loadData
             file="config/liquibase/fake-data/channel_fake.csv"
             separator=";"
-            tableName="nk_channel">
+            tableName="channel">
         </loadData>
     </changeSet>
     
@@ -17,7 +17,7 @@
         <loadData
             file="config/liquibase/fake-data/post_fake.csv"
             separator=";"
-            tableName="nk_post">
+            tableName="post">
         </loadData>
     </changeSet>
     
@@ -25,7 +25,7 @@
         <loadData
             file="config/liquibase/fake-data/comment_fake.csv"
             separator=";"
-            tableName="nk_comment">
+            tableName="comment">
         </loadData>
     </changeSet>
 

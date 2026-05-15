@@ -21,7 +21,7 @@ import jakarta.validation.constraints.NotNull;
  * A Review.
  */
 @Entity
-@Table(name = "nk_review")
+@Table(name = "review")
 @SuppressWarnings("common-java:DuplicatedBlocks")
 public class Review implements Serializable {
 

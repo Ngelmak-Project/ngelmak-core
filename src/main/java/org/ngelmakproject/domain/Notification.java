@@ -24,7 +24,7 @@ import jakarta.validation.constraints.NotNull;
  * alerts related to the application.
  */
 @Entity
-@Table(name = "nk_notification")
+@Table(name = "notification")
 public class Notification implements Serializable {
 
     private static final long serialVersionUID = 1L;

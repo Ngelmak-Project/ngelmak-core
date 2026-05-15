@@ -29,7 +29,7 @@ import jakarta.validation.constraints.Size;
  * The Post entity.
  */
 @Entity
-@Table(name = "nk_post")
+@Table(name = "post")
 @SuppressWarnings("common-java:DuplicatedBlocks")
 public class Post implements Serializable {
 
@@ -78,7 +78,7 @@ public class Post implements Serializable {
     private Channel channel;
 
     @ManyToMany
-    @JoinTable(name = "nk_post_file", joinColumns = {
+    @JoinTable(name = "post_file", joinColumns = {
             @JoinColumn(name = "post_id", referencedColumnName = "id") }, inverseJoinColumns = {
                     @JoinColumn(name = "file_id", referencedColumnName = "id") })
     private Set<File> files = new HashSet<>();
