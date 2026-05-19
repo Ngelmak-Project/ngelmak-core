@@ -1,5 +1,6 @@
 package org.ngelmakproject.service;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -26,7 +27,6 @@ import org.ngelmakproject.repository.SubscriptionRepository;
 import org.ngelmakproject.repository.projection.PostProjection;
 import org.ngelmakproject.service.cache.PostRedisService;
 import org.ngelmakproject.web.rest.dto.ActiveChannel;
-import org.ngelmakproject.web.rest.dto.FeedDTO;
 import org.ngelmakproject.web.rest.dto.FeedPageDTO;
 import org.ngelmakproject.web.rest.dto.PageDTO;
 import org.ngelmakproject.web.rest.dto.PostDTO;
@@ -43,23 +43,32 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Slice;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * Service Implementation for managing
- * {@link org.ngelmakproject.domain.Post}.
+ * Service for retrieving and managing {@link Post} entities.
+ *
+ * <p>
+ * <strong>Note:</strong> This service does not directly persist posts to the
+ * database. Write operations are delegated to {@code PostRedisService}, which
+ * stores updates in Redis and handles asynchronous or deferred persistence.
+ * </p>
  */
 @Service
+@Transactional(readOnly = true)
 public class PostService {
 
     private static final Logger log = LoggerFactory.getLogger(PostService.class);
 
     private static final String ENTITY_NAME = "post";
-    private final Instant windowStart = Instant.now().minus(50 * 365, ChronoUnit.DAYS);
+
+    // Define a fixed window start date for feed ranking to ensure consistent
+    // results and caching.
+    private static final long THIRTY_DAYS = Duration.ofDays(30).getSeconds();
+    private static final long MAX_EXPANSION = Duration.ofDays(180).getSeconds(); // 6 months
 
     private final PostRepository postRepository;
     private final FileService fileService;
@@ -93,7 +102,6 @@ public class PostService {
      * @param covers cover images attached to the post
      * @return the persisted Post
      */
-    @Transactional(readOnly = true)
     public Post save(Post post, List<MultipartFile> medias, List<MultipartFile> covers) {
         log.debug("Request to save Post : {} | {}x file(s) and {}x cover(s)",
                 post, medias.size(), covers.size());
@@ -127,7 +135,6 @@ public class PostService {
      * @param covers        new cover files to add
      * @return the updated Post
      */
-    @Transactional(readOnly = true)
     public Post update(Post post, List<File> deletedMedias,
             List<MultipartFile> medias, List<MultipartFile> covers) {
         log.debug("Request to update Post : {} | {}x file(s), {}x cover(s), {}x to delete", post, medias.size(),
@@ -199,7 +206,6 @@ public class PostService {
      * @param id the id of the entity.
      * @return the entity.
      */
-    @Transactional(readOnly = true)
     public Optional<Post> findOne(Long id) {
         log.debug("Request to get Post : {}", id);
         return postRepository.findById(id);
@@ -210,7 +216,6 @@ public class PostService {
      *
      * @param id the id of the entity.
      */
-    @Transactional(readOnly = true)
     public void delete(Long id) {
         log.debug("Request to delete Comment : {}", id);
         var channel = channelService.findOneByCurrentUser()
@@ -222,35 +227,9 @@ public class PostService {
                 throw new UnauthorizedResourceAccessException(
                         channel.getUser(), id, ENTITY_NAME);
             }
-
             // No pending CREATE found → queue a DELETE operation
             postRedisService.queueDelete(id);
         });
-    }
-
-    /**
-     * [TODO]
-     * To fetch recommended posts, you can integrate a recommendation engine or
-     * machine learning model that analyzes user preferences and suggests relevant
-     * content.
-     * 
-     * @param id
-     * @param pageRequest
-     * @return
-     */
-    @Transactional(readOnly = true)
-    public Slice<Post> getRecommendedPosts(Pageable pageable) {
-        log.debug("Post to get recommended Post");
-        return postRepository.findByStatusOrderByAtDesc(Status.VALIDATED, pageable);
-    }
-
-    @Transactional(readOnly = true)
-    public List<PostDTO> getRecommendedPost() {
-        log.debug("Request to get recommended Posts as DTO");
-        Channel channel = channelService.findOneByCurrentUser().orElseThrow(ChannelNotFoundException::new);
-        List<Post> posts = postRepository.findByStatusOrderByAtDesc(Status.VALIDATED, Pageable.unpaged())
-                .getContent();
-        return filloutReactions(posts, channel.getId());
     }
 
     /**
@@ -264,7 +243,6 @@ public class PostService {
      * @param pageable
      * @return
      */
-    @Transactional(readOnly = true)
     public PageDTO<PostDTO> getPostByAuthenticatedUser(Pageable pageable) {
         Channel channel = channelService.findOneByCurrentUser().orElseThrow(ChannelNotFoundException::new);
         List<Post> posts = this.postRepository.findByChannel(
@@ -286,7 +264,6 @@ public class PostService {
      * @param pageable
      * @return
      */
-    @Transactional(readOnly = true)
     public PageDTO<PostDTO> getPostByChannel(Long channelId, Pageable pageable) {
         // 1. Fetch post entries with channels, and files
         List<Post> posts = this.postRepository.findByChannelAndStatus(
@@ -310,7 +287,6 @@ public class PostService {
      * @param channelId
      * @return
      */
-    @Transactional(readOnly = true)
     private List<PostDTO> filloutReactions(List<Post> posts, Long channelId) {
         // Extract post IDs
         List<Long> postIds = posts.stream().map(Post::getId).toList();
@@ -329,146 +305,29 @@ public class PostService {
     }
 
     /**
-     * Create a personalized feed for each user based on their connections and
-     * recommendations.
-     * 
-     * <p>
-     * "Fan-Out on Write” approach, where each user has their own feed, and new
-     * posts are propagated to all followers’ feeds upon creation. This allows fo
-     * efficient feed retrieval.
-     * </p>
-     * 
-     * @param post
+     * Builds a personalized feed for the current user by combining:
+     * - Posts from the user's channel (via Feed entries)
+     * - Ranked global posts selected through a scoring algorithm
+     * - Aggregated reaction summaries for each post
+     *
+     * The method resolves the user's channel, fetches feed posts and
+     * ranked post IDs, loads the corresponding Post entities, enriches
+     * them with reaction data, sorts them by timestamp, and returns the
+     * result as a {@link FeedPageDTO}.
+     *
+     * @param sessionKey a key used for deterministic ranking; generated if null or
+     *                   blank
+     * @param pageable   pagination information
+     * @return a feed page containing enriched posts and pagination metadata
      */
-    public void propagatePostToFollowers(List<Post> posts) {
-        log.debug("Propagating {} posts to followers", posts.size());
-
-        if (posts.isEmpty()) {
-            return;
-        }
-        // Extract channels from posts
-        List<Channel> channels = posts.stream()
-                .map(Post::getChannel)
-                .distinct()
-                .toList();
-
-        // Fetch all subscriptions for these channels
-        var subscriptions = subscriptionRepository.findBySubscribedToIn(channels);
-
-        // Build feeds
-        List<Feed> feeds = new ArrayList<>();
-        for (Post post : posts) {
-            Channel channel = post.getChannel();
-            for (var sub : subscriptions) {
-                if (sub.getSubscribedTo().equals(channel)) {
-                    Feed feed = new Feed();
-                    feed.setFeedOwner(sub.getSubscriber());
-                    feed.setPost(post);
-                    feeds.add(feed);
-                }
-            }
-        }
-        // Save all feeds
-        if (!feeds.isEmpty()) {
-            feedRepository.saveAll(feeds);
-            log.info("Created {} feed entries for {} posts", feeds.size(), posts.size());
-        }
-    }
-
-    @Transactional(readOnly = true)
-    public FeedPageDTO<PostDTO> getFeedV3(Pageable pageable, String sessionKey) {
-        // If no session key provided → generate timestamp
-        if (sessionKey == null || sessionKey.isBlank()) {
-            sessionKey = String.valueOf(Instant.now().getEpochSecond());
-        }
-        // 1. Fetch feed entries with posts, channels, and files
-        Optional<Channel> optional = channelService.findOneByCurrentUser();
-        List<Post> posts = new ArrayList<>();
-        if (optional.isPresent()) {
-            log.debug("Request to retrieve Feeds for Channel {}.", optional.get());
-            // Fetch feed entries with posts, channels, and files
-            var page = feedRepository.findByFeedOwner(optional.get(), pageable);
-            posts.addAll(page.getContent().stream().map(Feed::getPost).toList());
-        }
-        // 2. Fetch posts.
-        posts.addAll(postRepository.fetchFeedWithRelations(
-                sessionKey,
-                windowStart,
-                pageable.getPageSize(),
-                (int) pageable.getOffset()));
-        // Extract post IDs
-        List<Long> postIds = posts.stream().map(Post::getId).toList();
-        // 2. Bulk fetch reactions for all posts in the feed
-        List<Reaction> reactions = reactionRepository.findByPostIds(postIds);
-        // 3. Group reactions by postId
-        Map<Long, List<Reaction>> reactionsByPost = ReactionService.groupReactionsByPost(reactions);
-        // 4. Map feed entries to DTOs
-        List<PostDTO> feeds = posts.stream().map(post -> {
-            List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
-            ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions,
-                    optional.map(Channel::getId).orElse(null));
-            return PostDTO.from(post, summary);
-        }).toList();
-
-        return new FeedPageDTO<PostDTO>(feeds, sessionKey, pageable.getPageNumber(),
-                pageable.getSort().stream()
-                        .map(order -> new SortDTO(order.getProperty(), order.getDirection().name()))
-                        .toList());
-    }
-
-    @Transactional(readOnly = true)
-    public FeedPageDTO<PostDTO> getFeedV2(Pageable pageable, String sessionKey) {
-        // If no session key provided → generate timestamp
-        if (sessionKey == null || sessionKey.isBlank()) {
-            sessionKey = String.valueOf(Instant.now().getEpochSecond());
-        }
-        // 1. Fetch feed entries with posts, channels, and files
-        Optional<Channel> optional = channelService.findOneByCurrentUser();
-        List<Post> posts = new ArrayList<>();
-        if (optional.isPresent()) {
-            log.debug("Request to retrieve Feeds for Channel {}.", optional.get());
-            // Fetch feed entries with posts, channels, and files
-            var page = feedRepository.findByFeedOwner(optional.get(), pageable);
-            posts.addAll(page.getContent().stream().map(Feed::getPost).toList());
-        }
-        // 2. Fetch posts.
-        posts.addAll(postRepository.fetchFeedWithRelations(
-                sessionKey,
-                windowStart,
-                pageable.getPageSize(),
-                (int) pageable.getOffset()));
-        //
-        posts.sort((a, b) -> {
-            return -1 * a.getAt().compareTo(b.getAt());
-        });
-
-        // Extract post IDs
-        List<Long> postIds = posts.stream().map(Post::getId).toList();
-        // 2. Bulk fetch reactions for all posts in the feed
-        List<Reaction> reactions = reactionRepository.findByPostIds(postIds);
-        // 3. Group reactions by postId
-        Map<Long, List<Reaction>> reactionsByPost = ReactionService.groupReactionsByPost(reactions);
-        // 4. Map feed entries to DTOs
-        List<PostDTO> feeds = posts.stream().map(post -> {
-            List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
-            ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions,
-                    optional.map(Channel::getId).orElse(null));
-            return PostDTO.from(post, summary);
-        }).toList();
-
-        return new FeedPageDTO<PostDTO>(feeds, sessionKey, pageable.getPageNumber(),
-                pageable.getSort().stream()
-                        .map(order -> new SortDTO(order.getProperty(), order.getDirection().name()))
-                        .toList());
-    }
-
-    @Transactional(readOnly = true)
     public FeedPageDTO<PostDTO> getFeed(String sessionKey, Pageable pageable) {
         // If no session key provided → generate timestamp
-        if (sessionKey == null || sessionKey.isBlank()) {
-            sessionKey = String.valueOf(Instant.now().getEpochSecond());
-        }
-        // 1. Fetch feed entries with posts, channels, and files
+        String key = (sessionKey == null || sessionKey.isBlank())
+                ? String.valueOf(Instant.now().getEpochSecond())
+                : sessionKey;
+        /**
+         * Fetch feed entries with posts, channels, and files for the user's channel.
+         */
         Optional<Channel> optional = channelService.findOneByCurrentUser();
         List<Post> posts = new ArrayList<>();
         if (optional.isPresent()) {
@@ -477,19 +336,49 @@ public class PostService {
             var page = feedRepository.findByFeedOwner(optional.get(), pageable);
             posts.addAll(page.getContent().stream().map(Feed::getPost).toList());
         }
-        // 2. Fetch posts.
-        List<Long> postIds = postRepository.fetchFeedPostIds(
-                sessionKey,
-                windowStart.getEpochSecond(),
-                pageable.getPageSize(),
-                (int) pageable.getOffset());
-        posts.addAll(postRepository.findAllByIdIn(postIds));
-        //
-        posts.sort((a, b) -> {
-            return -1 * a.getAt().compareTo(b.getAt());
-        });
 
-        // Bulk fetch reactions for all posts in the feed
+        /**
+         * Expands the feed window in 30‑day steps (up to 6 months) until posts are
+         * found.
+         * This ensures inactive users still see content while keeping the feed fresh.
+         * The final window start is persisted in Redis for future requests.
+         */
+        List<Long> postIds = Collections.emptyList();
+        // Retrieve the cached feed window start, or initialize with the last 90 days
+        long windowStart = postRedisService.getWindowSession(key).orElseGet(() -> {
+            long start = Instant.now().minus(90, ChronoUnit.DAYS).getEpochSecond();
+            postRedisService.setWindowSession(key, start);
+            return start;
+        });
+        // Expanding window: start at 3 months, then widen by 30-day increments
+        long[] windowOffsets = { 3, 4, 5, 6 }; // months back from now
+        long originalWindowStart = windowStart;
+        boolean expanded = false;
+        for (long days : windowOffsets) {
+            long since = Instant.now().minus(days, ChronoUnit.MONTHS).getEpochSecond();
+            postIds = postRepository.fetchFeedPostIds(
+                    key,
+                    since,
+                    pageable.getPageSize(),
+                    (int) pageable.getOffset());
+            if (!postIds.isEmpty()) {
+                windowStart = since; // use the successful window
+                expanded = (windowStart != originalWindowStart);
+                break;
+            }
+        }
+        // Save updated window only if it changed
+        if (expanded) {
+            postRedisService.setWindowSession(key, windowStart);
+        }
+        // Fetch posts with channels, files, by IDs (avoids N+1).
+        posts.addAll(postRepository.findAllByIdIn(postIds));
+        // Shuffle posts from the channels followed with those from the activity feed.
+        Collections.shuffle(posts);
+
+        /**
+         * Bulk fetch reactions for all posts in the feed to avoid N+1 queries.
+         */
         List<Reaction> reactions = reactionRepository.findByPostIds(postIds);
         // Group reactions by postId
         Map<Long, List<Reaction>> reactionsByPost = ReactionService.groupReactionsByPost(reactions);
@@ -518,7 +407,6 @@ public class PostService {
      * @param pageable the pagination information.
      * @return the paginated list of posts matching the search criteria.
      */
-    @Transactional(readOnly = true)
     public FeedPageDTO<PostDTO> searchFullText(String query, Pageable pageable) {
         // 1. Fetch feed entries with posts, channels, and files
         Optional<Channel> optional = channelService.findOneByCurrentUser();
@@ -559,69 +447,6 @@ public class PostService {
     }
 
     /**
-     * Retrieves a pageable list of validated posts enriched with:
-     * - minimal channel information (via EntityGraph on the repository)
-     * - attached files (also via EntityGraph)
-     * - aggregated reaction summaries (emoji → count + current user reaction)
-     * - commentCount already stored on Post (no comment fetching required)
-     *
-     * <p>
-     * This method avoids N+1 queries by:
-     * 1. Fetching posts with channel + files in a single query
-     * 2. Fetching all reactions for all posts in one bulk query
-     * 3. Building reaction summaries in memory
-     * 4. Mapping everything into PostDTO objects
-     * </p>
-     * 
-     * @param pageable
-     * @return
-     */
-    @Transactional(readOnly = true)
-    public PageDTO<FeedDTO> getFeed(Pageable pageable) {
-        // 1. Fetch feed entries with posts, channels, and files
-        Optional<Channel> optional = channelService.findOneByCurrentUser();
-        List<Feed> feeds = new ArrayList<>();
-        if (optional.isPresent()) {
-            log.debug("Request to retrieve Feeds for Channel {}.", optional.get());
-            // Fetch feed entries with posts, channels, and files
-            var page = feedRepository.findByFeedOwner(optional.get(), pageable);
-            feeds = new ArrayList<>(page.getContent());
-        }
-        // 2. Fetch post feeds.
-        feeds.addAll(this.postRepository.findByStatusOrderByAtDesc(
-                Status.VALIDATED,
-                pageable).getContent().stream().map(post -> {
-                    var feed = new Feed();
-                    feed.setPost(post);
-                    return feed;
-                }).toList());
-        // [TODO] Get recommended posts (assuming a method to fetch recommendations
-        feeds.sort((a, b) -> {
-            return -1 * a.getPost().getAt().compareTo(b.getPost().getAt());
-        });
-
-        // Extract post IDs
-        List<Long> postIds = feeds.stream()
-                .map(f -> f.getPost().getId())
-                .toList();
-        // Bulk fetch reactions for all posts in the feed
-        List<Reaction> reactions = reactionRepository.findByPostIds(postIds);
-        // Group reactions by postId
-        Map<Long, List<Reaction>> reactionsByPost = ReactionService.groupReactionsByPost(reactions);
-        // Map feed entries to DTOs
-        List<FeedDTO> feedDTOs = feeds.stream().map(feed -> {
-            var post = feed.getPost();
-            List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
-            ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions,
-                    optional.map(Channel::getId).orElse(null));
-            return FeedDTO.from(feed.getId(), PostDTO.from(post, summary));
-        }).toList();
-
-        Page<FeedDTO> page = new PageImpl<>(feedDTOs, pageable, feedDTOs.size());
-        return PageDTO.from(page);
-    }
-
-    /**
      * Fetches trending data including most active channels and most
      * commented/trending posts.
      * 
@@ -630,7 +455,6 @@ public class PostService {
      * @return Trending object containing top channels and post lists with reaction
      *         summaries.
      */
-    @Transactional(readOnly = true)
     public Trending getTrending() {
         Trending trending = postRedisService.getTrending().orElseGet(() -> {
             log.warn("🦋 Cache miss for trending, fetching from database");
@@ -695,7 +519,6 @@ public class PostService {
      * @return a list of posts from the earliest successful fetch, or an empty
      *         list if no results are found within 90 days
      */
-    @Transactional(readOnly = true)
     private List<Long> fetchPostsWithFallback(Function<Instant, List<Long>> fetcher) {
         long[] dayOffsets = { 7, 30, 90 };
 
@@ -708,6 +531,59 @@ public class PostService {
         }
 
         return Collections.emptyList();
+    }
+
+    /**
+     * [TODO]
+     * Create a personalized feed for each user based on their connections and
+     * recommendations.
+     * 
+     * <p>
+     * "Fan-Out on Write” approach, where each user has their own feed, and new
+     * posts are propagated to all followers’ feeds upon creation. This allows fo
+     * efficient feed retrieval.
+     * </p>
+     * 
+     */
+    @Transactional(readOnly = false)
+    @Scheduled(cron = "0 0 3 * * *") // every day at 3 AM
+    public void propagatePostToFollowers() {
+        // Fetch recent posts created in the last 24 hours
+        Instant since = Instant.now().minus(1, ChronoUnit.DAYS);
+        List<Post> posts = postRepository.findByAtAfter(since);
+
+        if (posts.isEmpty()) {
+            return;
+        }
+
+        log.debug("Propagating {} posts to followers", posts.size());
+        // Extract channels from posts
+        List<Channel> channels = posts.stream()
+                .map(Post::getChannel)
+                .distinct()
+                .toList();
+
+        // Fetch all subscriptions for these channels
+        var subscriptions = subscriptionRepository.findBySubscribedToIn(channels);
+
+        // Build feeds
+        List<Feed> feeds = new ArrayList<>();
+        for (Post post : posts) {
+            Channel channel = post.getChannel();
+            for (var sub : subscriptions) {
+                if (sub.getSubscribedTo().equals(channel)) {
+                    Feed feed = new Feed();
+                    feed.setFeedOwner(sub.getSubscriber());
+                    feed.setPost(post);
+                    feeds.add(feed);
+                }
+            }
+        }
+        // Save all feeds
+        if (!feeds.isEmpty()) {
+            feedRepository.saveAll(feeds);
+            log.info("Created {} feed entries for {} posts", feeds.size(), posts.size());
+        }
     }
 
     /**
@@ -726,7 +602,7 @@ public class PostService {
      * projections and batch operations for maximum efficiency.
      * </p>
      */
-    @Transactional
+    @Transactional(readOnly = false)
     @Scheduled(cron = "0 0 3 * * *") // every day at 3 AM
     public void purgeDeletedComments() {
         Instant cutoff = Instant.now().minus(7, ChronoUnit.DAYS);

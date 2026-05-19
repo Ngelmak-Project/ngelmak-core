@@ -1,6 +1,7 @@
 package org.ngelmakproject.service.cache;
 
 import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -28,6 +29,7 @@ public class PostRedisService {
     private static final String REDIS_DELETE_KEY = "post:delete";
     private static final String REDIS_TRENDING_KEY = "post:trending";
     private static final String REDIS_REPLY_COUNT_KEY = "post:replycount";
+    private static final String REDIS_WINDOW_SESSION_KEY = "post:window:session";
 
     private final PostRepository postRepository;
     private final RedisTemplate<String, String> redis;
@@ -111,6 +113,31 @@ public class PostRedisService {
         log.debug("Trending...");
         return Optional.ofNullable(redis.opsForValue().get(REDIS_TRENDING_KEY))
                 .map(t -> CacheTools.fromJson((String) t, Trending.class));
+    }
+
+    /**
+     * Retrieves the window session timestamp for a given session key.
+     *
+     * @param sessionKey the session key to look up
+     * @return an Optional containing the window session timestamp if found
+     */
+    public Optional<Long> getWindowSession(String sessionKey) {
+        String redisKey = REDIS_WINDOW_SESSION_KEY + ":" + sessionKey;
+        log.debug("Getting window session for key: {}", sessionKey);
+        return Optional.ofNullable(redis.opsForValue().get(redisKey))
+                .map(Long::parseLong);
+    }
+
+    /**
+     * Sets the window session timestamp for a given session key.
+     *
+     * @param sessionKey    the session key to set
+     * @param windowSeconds the timestamp to associate with the session key
+     */
+    public void setWindowSession(String sessionKey, Long windowSeconds) {
+        String redisKey = REDIS_WINDOW_SESSION_KEY + ":" + sessionKey;
+        redis.opsForValue().set(redisKey, windowSeconds.toString(), Duration.of(10, ChronoUnit.MINUTES));
+        log.info("📦 Redis | Window session set - {}, expires in {} seconds", sessionKey, windowSeconds);
     }
 
     /**

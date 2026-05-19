@@ -253,6 +253,18 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	@EntityGraph(attributePaths = { "channel", "files", "postReply" })
 	List<Post> findAllByIdIn(List<Long> ids);
 
+	/**
+	 * Fetches posts created after a specified timestamp with channel, files, and
+	 * postReply eagerly loaded. This is used for propagating new posts to
+	 * followers.
+	 *
+	 * @param since the timestamp to filter posts
+	 * @return a list of posts created after the specified timestamp
+	 */
+	@EntityGraph(attributePaths = { "channel", "files", "postReply" })
+	@Query("SELECT p FROM Post p WHERE p.at >= :since")
+	List<Post> findByAtAfter(@Param("since") Instant since);
+
 	@Query("""
 			SELECT p FROM Post p
 			LEFT JOIN FETCH p.postReply
