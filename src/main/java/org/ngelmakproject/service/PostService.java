@@ -244,6 +244,7 @@ public class PostService {
         return postRepository.findByStatusOrderByAtDesc(Status.VALIDATED, pageable);
     }
 
+    @Transactional(readOnly = true)
     public List<PostDTO> getRecommendedPost() {
         log.debug("Request to get recommended Posts as DTO");
         Channel channel = channelService.findOneByCurrentUser().orElseThrow(ChannelNotFoundException::new);
@@ -263,6 +264,7 @@ public class PostService {
      * @param pageable
      * @return
      */
+    @Transactional(readOnly = true)
     public PageDTO<PostDTO> getPostByAuthenticatedUser(Pageable pageable) {
         Channel channel = channelService.findOneByCurrentUser().orElseThrow(ChannelNotFoundException::new);
         List<Post> posts = this.postRepository.findByChannel(
@@ -284,6 +286,7 @@ public class PostService {
      * @param pageable
      * @return
      */
+    @Transactional(readOnly = true)
     public PageDTO<PostDTO> getPostByChannel(Long channelId, Pageable pageable) {
         // 1. Fetch post entries with channels, and files
         List<Post> posts = this.postRepository.findByChannelAndStatus(
@@ -307,6 +310,7 @@ public class PostService {
      * @param channelId
      * @return
      */
+    @Transactional(readOnly = true)
     private List<PostDTO> filloutReactions(List<Post> posts, Long channelId) {
         // Extract post IDs
         List<Long> postIds = posts.stream().map(Post::getId).toList();
@@ -371,6 +375,7 @@ public class PostService {
         }
     }
 
+    @Transactional(readOnly = true)
     public FeedPageDTO<PostDTO> getFeedV3(Pageable pageable, String sessionKey) {
         // If no session key provided → generate timestamp
         if (sessionKey == null || sessionKey.isBlank()) {
@@ -411,6 +416,7 @@ public class PostService {
                         .toList());
     }
 
+    @Transactional(readOnly = true)
     public FeedPageDTO<PostDTO> getFeedV2(Pageable pageable, String sessionKey) {
         // If no session key provided → generate timestamp
         if (sessionKey == null || sessionKey.isBlank()) {
@@ -456,6 +462,7 @@ public class PostService {
                         .toList());
     }
 
+    @Transactional(readOnly = true)
     public FeedPageDTO<PostDTO> getFeed(String sessionKey, Pageable pageable) {
         // If no session key provided → generate timestamp
         if (sessionKey == null || sessionKey.isBlank()) {
@@ -511,6 +518,7 @@ public class PostService {
      * @param pageable the pagination information.
      * @return the paginated list of posts matching the search criteria.
      */
+    @Transactional(readOnly = true)
     public FeedPageDTO<PostDTO> searchFullText(String query, Pageable pageable) {
         // 1. Fetch feed entries with posts, channels, and files
         Optional<Channel> optional = channelService.findOneByCurrentUser();
@@ -568,6 +576,7 @@ public class PostService {
      * @param pageable
      * @return
      */
+    @Transactional(readOnly = true)
     public PageDTO<FeedDTO> getFeed(Pageable pageable) {
         // 1. Fetch feed entries with posts, channels, and files
         Optional<Channel> optional = channelService.findOneByCurrentUser();
@@ -621,6 +630,7 @@ public class PostService {
      * @return Trending object containing top channels and post lists with reaction
      *         summaries.
      */
+    @Transactional(readOnly = true)
     public Trending getTrending() {
         Trending trending = postRedisService.getTrending().orElseGet(() -> {
             log.warn("🦋 Cache miss for trending, fetching from database");
@@ -685,6 +695,7 @@ public class PostService {
      * @return a list of posts from the earliest successful fetch, or an empty
      *         list if no results are found within 90 days
      */
+    @Transactional(readOnly = true)
     private List<Long> fetchPostsWithFallback(Function<Instant, List<Long>> fetcher) {
         long[] dayOffsets = { 7, 30, 90 };
 
