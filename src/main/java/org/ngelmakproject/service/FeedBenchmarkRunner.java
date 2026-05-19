@@ -21,26 +21,28 @@ public class FeedBenchmarkRunner {
 
     private static final int ITERATIONS = 300;
 
-    @PostConstruct
+    private final Map<String, Stats> results = new LinkedHashMap<>();
+
+    @EventListener(ApplicationReadyEvent.class)
     public void runBenchmark() {
         log.info("Starting feed benchmark…");
 
-        benchmark("getFeedV3", () -> postService.getFeedV3(pageable(), "session123"));
-        benchmark("getFeedV2", () -> postService.getFeedV2(pageable(), "session123"));
-        benchmark("getFeed(sessionKey,pageable)", () -> postService.getFeed("session123", pageable()));
-        benchmark("getFeed(pageable)", () -> postService.getFeed(pageable()));
+        run("getFeedV3", () -> postService.getFeedV3(pageable(), "session123"));
+        run("getFeedV2", () -> postService.getFeedV2(pageable(), "session123"));
+        run("getFeed(sessionKey,pageable)", () -> postService.getFeed("session123", pageable()));
+        run("getFeed(pageable)", () -> postService.getFeed(pageable()));
 
-        log.info("Feed benchmark completed.");
+        printFinalSummary();
     }
 
     private Pageable pageable() {
-        return PageRequest.of(0, 50);
+        return PageRequest.of(0, 20);
     }
 
-    private void benchmark(String name, Runnable method) {
+    private void run(String name, Runnable method) {
         List<Long> latencies = new ArrayList<>(ITERATIONS);
 
-        // Warm‑up
+        // Warm-up
         for (int i = 0; i < 20; i++) method.run();
 
         // Measure
@@ -51,10 +53,10 @@ public class FeedBenchmarkRunner {
             latencies.add(end - start);
         }
 
-        printStats(name, latencies);
+        results.put(name, computeStats(latencies));
     }
 
-    private void printStats(String name, List<Long> latencies) {
+    private Stats computeStats(List<Long> latencies) {
         Collections.sort(latencies);
 
         long min = latencies.get(0);
@@ -68,28 +70,14 @@ public class FeedBenchmarkRunner {
 
         double stdDev = Math.sqrt(variance);
 
-        long p50 = percentile(latencies, 0.50);
-        long p95 = percentile(latencies, 0.95);
-        long p99 = percentile(latencies, 0.99);
-
-        log.info("\n=== {} ===\n" +
-                        "Iterations: {}\n" +
-                        "Min:  {}\n" +
-                        "Max:  {}\n" +
-                        "Mean: {}\n" +
-                        "Std:  {}\n" +
-                        "p50:  {}\n" +
-                        "p95:  {}\n" +
-                        "p99:  {}",
-                name,
-                latencies.size(),
-                nanos(min),
-                nanos(max),
-                nanos((long) mean),
-                nanos((long) stdDev),
-                nanos(p50),
-                nanos(p95),
-                nanos(p99)
+        return new Stats(
+                min,
+                max,
+                (long) mean,
+                (long) stdDev,
+                percentile(latencies, 0.50),
+                percentile(latencies, 0.95),
+                percentile(latencies, 0.99)
         );
     }
 
@@ -98,8 +86,37 @@ public class FeedBenchmarkRunner {
         return sorted.get(Math.max(0, Math.min(index, sorted.size() - 1)));
     }
 
-    private String nanos(long ns) {
-        return TimeUnit.NANOSECONDS.toMicros(ns) + " µs";
-    }
-}
+    private void printFinalSummary() {
+        log.info("\n\n==================== FEED BENCHMARK SUMMARY ====================\n");
 
+        results.forEach((name, s) -> {
+            log.info("""
+                    {}:
+                      min:  {} µs
+                      max:  {} µs
+                      mean: {} µs
+                      std:  {} µs
+                      p50:  {} µs
+                      p95:  {} µs
+                      p99:  {} µs
+                    """,
+                    name,
+                    toMicros(s.min),
+                    toMicros(s.max),
+                    toMicros(s.mean),
+                    toMicros(s.std),
+                    toMicros(s.p50),
+                    toMicros(s.p95),
+                    toMicros(s.p99)
+            );
+        });
+
+        log.info("===============================================================\n");
+    }
+
+    private long toMicros(long ns) {
+        return TimeUnit.NANOSECONDS.toMicros(ns);
+    }
+
+    private record Stats(long min, long max, long mean, long std, long p50, long p95, long p99) {}
+}
