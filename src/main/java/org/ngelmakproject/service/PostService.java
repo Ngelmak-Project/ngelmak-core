@@ -64,8 +64,8 @@ public class PostService {
 
     private static final String ENTITY_NAME = "post";
 
-    // Window offsets in seconds for feed expansion: 1 year, 1.5 years, and 2 years.
-    private static final long[] WINDOW_OFFSETS = { 365, 425, 485 }; // days back from now
+    // Window offsets in seconds for feed expansion: 1 year, 2 years, 3 years.
+    private static final long[] WINDOW_OFFSETS = { 1, 2, 3 }; // days back from now
 
     private final PostRepository postRepository;
     private final FileService fileService;
@@ -350,7 +350,7 @@ public class PostService {
         long originalWindowStart = windowStart;
         boolean expanded = false;
         for (long days : WINDOW_OFFSETS) {
-            long since = Instant.now().minus(days, ChronoUnit.DAYS).getEpochSecond();
+            long since = Instant.now().minus(days, ChronoUnit.YEARS).getEpochSecond();
             postIds = postRepository.fetchFeedPostIds(
                     key,
                     since,
