@@ -350,12 +350,12 @@ public class PostService {
             postRedisService.setWindowSession(key, start);
             return start;
         });
-        // Expanding window: start at 3 months, then widen by 30-day increments
-        long[] windowOffsets = { 3, 4, 5, 6 }; // months back from now
+        // Expanding window: start at 90 days, then widen by 30-day increments
+        long[] windowOffsets = { 90, 120, 150, 180 }; // days back from now
         long originalWindowStart = windowStart;
         boolean expanded = false;
         for (long days : windowOffsets) {
-            long since = Instant.now().minus(days, ChronoUnit.MONTHS).getEpochSecond();
+            long since = Instant.now().minus(days, ChronoUnit.DAYS).getEpochSecond();
             postIds = postRepository.fetchFeedPostIds(
                     key,
                     since,
