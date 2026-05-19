@@ -1,6 +1,5 @@
 package org.ngelmakproject.service;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -65,10 +64,8 @@ public class PostService {
 
     private static final String ENTITY_NAME = "post";
 
-    // Define a fixed window start date for feed ranking to ensure consistent
-    // results and caching.
-    private static final long THIRTY_DAYS = Duration.ofDays(30).getSeconds();
-    private static final long MAX_EXPANSION = Duration.ofDays(180).getSeconds(); // 6 months
+    // Window offsets in seconds for feed expansion: 1 year, 1.5 years, and 2 years.
+    private static final long[] WINDOW_OFFSETS = { 365, 425, 485 }; // days back from now
 
     private final PostRepository postRepository;
     private final FileService fileService;
@@ -350,11 +347,9 @@ public class PostService {
             postRedisService.setWindowSession(key, start);
             return start;
         });
-        // Expanding window: start at 90 days, then widen by 30-day increments
-        long[] windowOffsets = { 90, 120, 150, 180 }; // days back from now
         long originalWindowStart = windowStart;
         boolean expanded = false;
-        for (long days : windowOffsets) {
+        for (long days : WINDOW_OFFSETS) {
             long since = Instant.now().minus(days, ChronoUnit.DAYS).getEpochSecond();
             postIds = postRepository.fetchFeedPostIds(
                     key,
