@@ -65,7 +65,7 @@ public class PostService {
     private static final String ENTITY_NAME = "post";
 
     // Window offsets in seconds for feed expansion: 1 year, 2 years, 3 years.
-    private static final long[] WINDOW_OFFSETS = { 1, 2, 3 }; // days back from now
+    private static final int[] WINDOW_OFFSETS = { 1, 2, 3 }; // days back from now
 
     private final PostRepository postRepository;
     private final FileService fileService;
@@ -343,14 +343,14 @@ public class PostService {
         List<Long> postIds = Collections.emptyList();
         // Retrieve the cached feed window start, or initialize with the last 90 days
         long windowStart = postRedisService.getWindowSession(key).orElseGet(() -> {
-            long start = Instant.now().minus(90, ChronoUnit.DAYS).getEpochSecond();
+            long start = Instant.now().minus(365, ChronoUnit.DAYS).getEpochSecond();
             postRedisService.setWindowSession(key, start);
             return start;
         });
         long originalWindowStart = windowStart;
         boolean expanded = false;
-        for (long days : WINDOW_OFFSETS) {
-            long since = Instant.now().minus(days, ChronoUnit.YEARS).getEpochSecond();
+        for (long years : WINDOW_OFFSETS) {
+            long since = Instant.now().minus(years * 365, ChronoUnit.DAYS).getEpochSecond();
             postIds = postRepository.fetchFeedPostIds(
                     key,
                     since,
