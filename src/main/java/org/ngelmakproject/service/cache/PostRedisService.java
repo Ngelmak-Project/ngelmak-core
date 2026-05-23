@@ -1,6 +1,7 @@
 package org.ngelmakproject.service.cache;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -12,10 +13,12 @@ import java.util.stream.Collectors;
 
 import org.ngelmakproject.domain.Post;
 import org.ngelmakproject.repository.PostRepository;
+import org.ngelmakproject.repository.projection.PostEngagementProjection;
 import org.ngelmakproject.web.rest.dto.Trending;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class PostRedisService {
     private static final Logger log = LoggerFactory.getLogger(PostRedisService.class);
 
+    private static final String REDIS_FEED_KEY = "feed:scores";
+    private static final String REDIS_DIRTY_POSTS_KEY = "feed:dirty-posts";
     private static final String REDIS_CREATE_KEY = "post:create";
     private static final String REDIS_UPDATE_KEY = "post:update";
     private static final String REDIS_DELETE_KEY = "post:delete";
@@ -140,6 +145,104 @@ public class PostRedisService {
         log.info("📦 Redis | Window session set - {}, expires in {} seconds", sessionKey, windowSeconds);
     }
 
+    private record PostScoreRecord(
+            Long id,
+            Double baseScore,
+            Double finalScore) {
+    }
+
+    /**
+     * Recompute base scores for all posts within the last 5 years
+     * and update the Redis.
+     */
+    public void recomputeScores() {
+        // Fetch engagement metrics for all posts in the last 5 years.
+        List<PostEngagementProjection> engagementMetrics = postRepository.fetchRecentEngagementMetricsByAtAfter(
+                Instant.now().minus(5 * 365, ChronoUnit.DAYS));
+        // Update Redis with new scores.
+        updateScores(engagementMetrics);
+    }
+
+    /**
+     * Computes and updates the base score for each post using the same
+     * formula as the SQL scoring:
+     *
+     * - Recency (50%): exponential decay, 48h half-life
+     * - Engagement (30%): logarithmic scale, capped at 100 comments
+     */
+    private void updateScores(List<PostEngagementProjection> metrics) {
+        Instant now = Instant.now();
+
+        metrics.forEach(p -> {
+            // --- RECENCY (50%) ---
+            double hoursSince = Duration.between(p.getAt(), now).toHours();
+            double recency = Math.exp(-(hoursSince / 48.0)) * 0.50;
+
+            // --- ENGAGEMENT (30%) ---
+            // SQL: LN(1 + LEAST(comment_count, 100)) / LN(101)
+            int cappedComments = (int) Math.min(p.getCommentCount(), 100);
+            double engagement = (Math.log(1.0 + cappedComments) / Math.log(101.0)) * 0.30;
+
+            // --- FINAL BASE SCORE ---
+            double baseScore = recency + engagement;
+
+            redis.opsForZSet().add(REDIS_FEED_KEY, p.getId().toString(), baseScore);
+        });
+    }
+
+    /**
+     * Fetch paginated post IDs *with their base scores*.
+     * If Redis is empty, recompute scores and retry once.
+     */
+    public List<Long> getTopPostIdsWithScore(String sessionId, int page, int size) {
+        // Compute dynamic window size
+        int windowSize = Math.max(500, (page + 1) * size);
+
+        // Fetch base scores from Redis
+        Set<ZSetOperations.TypedTuple<String>> raw = redis.opsForZSet().reverseRangeWithScores(REDIS_FEED_KEY, 0,
+                windowSize - 1);
+
+        // Auto-refresh if empty
+        if (raw == null || raw.isEmpty()) {
+            recomputeScores();
+            raw = redis.opsForZSet().reverseRangeWithScores(REDIS_FEED_KEY, 0, windowSize - 1);
+            if (raw == null || raw.isEmpty()) {
+                return List.of();
+            }
+        }
+        log.info("📦 Redis | Fetched {} posts from Redis for session '{}'", raw.size(), sessionId);
+
+        // Compute final score with session randomness
+        List<PostScoreRecord> scored = raw.stream()
+                .map(t -> {
+                    Long id = Long.parseLong(t.getValue());
+                    double base = t.getScore();
+                    // Deterministic randomness
+                    int hash = Math.abs((sessionId + "-" + id).hashCode());
+                    double randomness = (hash % 100) / 100.0;
+                    double finalScore = base + randomness * 0.20;
+                    return new PostScoreRecord(id, base, finalScore);
+                })
+                .toList();
+
+        // Sort by finalScore DESC
+        scored = scored.stream()
+                .sorted((a, b) -> Double.compare(b.finalScore(), a.finalScore()))
+                .toList();
+
+        // Apply pagination AFTER sorting
+        int start = page * size;
+        int end = Math.min(start + size, scored.size());
+
+        if (start >= scored.size()) {
+            return List.of();
+        }
+
+        return scored.subList(start, end).stream()
+                .map(PostScoreRecord::id)
+                .toList();
+    }
+
     /**
      * Flushes pending CREATE and UPDATE post operations from Redis to the database.
      * Runs every 2 seconds and persists all queued posts in batch.
@@ -174,7 +277,11 @@ public class PostRedisService {
 
         // Save all and clean up Redis
         postRepository.saveAll(toSave);
+
         if (!createdKeys.isEmpty()) {
+            // Mark all saved posts as dirty
+            redis.opsForSet().add(REDIS_DIRTY_POSTS_KEY,
+                    createdKeys.stream().map(Object::toString).toArray(String[]::new));
             redis.opsForHash().delete(REDIS_CREATE_KEY, createdKeys.toArray());
         }
         if (!updatedKeys.isEmpty()) {
@@ -200,8 +307,12 @@ public class PostRedisService {
             toDelete.add(id);
         }
         postRepository.deleteAllById(toDelete);
+
         if (!processedKeys.isEmpty()) {
             redis.opsForHash().delete(REDIS_DELETE_KEY, processedKeys.toArray());
+            // Also remove from feed and dirty set to prevent stale data.
+            redis.opsForZSet().remove(REDIS_FEED_KEY, processedKeys.toArray());
+            redis.opsForSet().remove(REDIS_DIRTY_POSTS_KEY, processedKeys.toArray());
         }
         log.info("Removed {} processed operations from Redis", processedKeys.size());
     }
@@ -236,6 +347,55 @@ public class PostRedisService {
         // Clear processed entries
         if (!processedKeys.isEmpty()) {
             redis.opsForHash().delete(REDIS_REPLY_COUNT_KEY, processedKeys.toArray());
+            // Mark affected posts as dirty for score recomputation.
+            redis.opsForSet().add(REDIS_DIRTY_POSTS_KEY,
+                    processedKeys.stream().map(Object::toString).toArray(String[]::new));
         }
+    }
+
+    /**
+     * Periodically recomputes base scores for "dirty" posts that have been
+     * modified since the last computation.
+     * 
+     * <p>
+     * Runs every 1 minute, checking for post IDs marked as "dirty" in Redis,
+     * recomputing their scores based on engagement metrics, and updating the
+     * Redis ZSET accordingly. Also refreshes scores for recent posts to maintain
+     * recency relevance.
+     * </p>
+     */
+    @Scheduled(fixedRate = 1, timeUnit = TimeUnit.MINUTES)
+    public void recomputeScoresSmart() {
+        boolean redisEmpty = redis.opsForZSet().size(REDIS_FEED_KEY) == 0;
+
+        // If Redis empty → full recompute
+        if (redisEmpty) {
+            log.warn("Redis feed is empty, performing full recompute");
+            recomputeScores();
+            return;
+        }
+
+        // Pull dirty post IDs
+        List<Long> dirtyIds = redis.opsForSet().members(REDIS_DIRTY_POSTS_KEY).stream().map(Long::valueOf).toList();
+        if (dirtyIds.isEmpty()) {
+            log.debug("No dirty posts to recompute");
+            return;
+        }
+        log.info("Recomputing scores for {} dirty post(s)", dirtyIds.size());
+
+        // Recompute only dirty posts
+        if (dirtyIds != null && !dirtyIds.isEmpty()) {
+            // Fetch engagement metrics for dirty posts and update scores.
+            List<PostEngagementProjection> metrics = postRepository.fetchEngagementMetricsByPostIds(dirtyIds);
+            updateScores(metrics);
+            // Clear dirty set
+            redis.delete(REDIS_DIRTY_POSTS_KEY);
+        }
+
+        // Refresh recency window (last 24 hours)
+        List<PostEngagementProjection> recent = postRepository.fetchRecentEngagementMetricsByAtAfter(
+                Instant.now().minus(1, ChronoUnit.DAYS));
+
+        updateScores(recent);
     }
 }

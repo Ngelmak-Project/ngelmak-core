@@ -32,21 +32,14 @@ public class GatewayAuthenticationFilter extends OncePerRequestFilter {
 			throws ServletException, IOException {
 
 		String method = request.getMethod();
-
 		String userId = request.getHeader("X-User-Id");
 		String login = request.getHeader("X-User-Login");
 		String authoritiesStr = request.getHeader("X-User-Authorities");
 
 		// Only show log authentication on POST, PUT, DELETE
 		if (!method.equals("POST") && !method.equals("PUT") && !method.equals("DELETE")) {
-			log.info("""
-					"========< Gateway Auth Filter >=========
-					"Method             : {}
-					"X-User-Id          : {}
-					"X-User-Login       : {}
-					"X-User-Authorities : {}
-					"========================================
-					""",
+			log.debug(
+					"Method: {} | X-User-Id: {} | X-User-Login: {} | X-User-Authorities: {} ========================================",
 					method, userId, login, authoritiesStr);
 		}
 

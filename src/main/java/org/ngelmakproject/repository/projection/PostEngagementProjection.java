@@ -1,6 +1,6 @@
 package org.ngelmakproject.repository.projection;
 
-import org.ngelmakproject.domain.Post;
+import java.time.Instant;
 
 /**
  * Projection interface for Post engagement metrics.
@@ -9,9 +9,10 @@ import org.ngelmakproject.domain.Post;
  * This projection is used to efficiently retrieve posts along with their engagement metrics in a single query,
  * reducing the need for multiple database calls and improving performance when displaying trending or popular posts.
  */
-public record PostEngagementProjection(
-    Post post,
-    long reactionCount,
-    double engagementScore
-) {}
+public interface PostEngagementProjection {
+    Long getId();
+    Instant getAt();
+    Long getCommentCount();
+    Long getReactionCount();
+}
 

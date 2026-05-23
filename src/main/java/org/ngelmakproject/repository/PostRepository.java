@@ -10,6 +10,7 @@ import org.ngelmakproject.domain.Channel;
 import org.ngelmakproject.domain.Post;
 import org.ngelmakproject.domain.Post.Status;
 import org.ngelmakproject.repository.projection.CommentProjection;
+import org.ngelmakproject.repository.projection.PostEngagementProjection;
 import org.ngelmakproject.repository.projection.PostProjection;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -37,23 +38,57 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	@Query("SELECT p FROM Post p WHERE p.deletedAt < :cutoff")
 	List<PostProjection> findExpiredPosts(Instant cutoff);
 
-	@Query(value = """
-			SELECT p.*,
-			(
-			(EXTRACT(EPOCH FROM p.created_at) * 0.8) +
-			(LEAST(p.comment_count, 20) * 0.2) +
-			((hashtext(CONCAT(:sessionKey, '-', p.id)) % 1000) / 1000.0 * 300)
-			) AS score
-			FROM post p
-			WHERE p.created_at >= :windowStart
-			ORDER BY score DESC
-			LIMIT :limit OFFSET :offset
-			""", nativeQuery = true)
-	List<Post> fetchFeed(
-			@Param("sessionKey") String sessionKey,
-			@Param("windowStart") Instant windowStart,
-			@Param("limit") int limit,
-			@Param("offset") int offset);
+	/**
+	 * Fetches engagement metrics (comment count + reaction count) for all posts
+	 * created after the given timestamp.
+	 *
+	 * <p>
+	 * Used for periodic recency‑based score refreshes.
+	 *
+	 * @param since only posts with p.at >= since are included
+	 * @return list of projections containing:
+	 *         - post ID
+	 *         - creation timestamp
+	 *         - comment count
+	 *         - reaction count (aggregated via LEFT JOIN)
+	 */
+	@Query("""
+			SELECT p.id AS id,
+			       p.at AS at,
+			       p.commentCount AS commentCount,
+			       COUNT(r) AS reactionCount
+			FROM Post p
+			LEFT JOIN Reaction r ON r.post.id = p.id
+			WHERE p.at >= :since
+			GROUP BY p.id
+			""")
+	List<PostEngagementProjection> fetchRecentEngagementMetricsByAtAfter(Instant since);
+
+	/**
+	 * Fetches engagement metrics (comment count + reaction count) for a specific
+	 * set of post IDs.
+	 *
+	 * <p>
+	 * Used when recomputing scores only for posts that changed (dirty posts).
+	 *
+	 * @param postIds list of post IDs to fetch metrics for
+	 * @return list of projections containing:
+	 *         - post ID
+	 *         - creation timestamp
+	 *         - comment count
+	 *         - reaction count (aggregated via LEFT JOIN)
+	 */
+	@Query("""
+			SELECT p.id AS id,
+			       p.at AS at,
+			       p.commentCount AS commentCount,
+			       COUNT(r) AS reactionCount
+			FROM Post p
+			LEFT JOIN Reaction r ON r.post.id = p.id
+			WHERE p.id IN :postIds
+			GROUP BY p.id
+			""")
+	List<PostEngagementProjection> fetchEngagementMetricsByPostIds(List<Long> postIds);
 
 	@Query(value = """
 			SELECT DISTINCT p.*,
@@ -128,7 +163,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			    DESC
 			LIMIT :limit OFFSET :offset
 			""", nativeQuery = true)
-	List<Long> fetchFeedPostIds(
+	List<Long> fetchFeedPostIdsOld(
 			@Param("sessionKey") String sessionKey,
 			@Param("windowStart") Instant windowStart,
 			@Param("limit") int limit,
@@ -139,23 +174,20 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	 * Applies a scoring algorithm combining recency, exponential decay, comment
 	 * count, and session-based randomization.
 	 *
-	 * @param sessionKey       A session-specific key used to introduce
-	 *                         deterministic randomness.
-	 * @param windowStartEpoch Epoch seconds representing the earliest allowed
-	 *                         timestamp.
-	 * @param limit            Maximum number of post IDs to return.
-	 * @param offset           Number of results to skip for pagination.
+	 * @param sessionKey  A session-specific key used to introduce
+	 *                    deterministic randomness.
+	 * @param windowStart Representing the earliest allowed timestamp.
+	 * @param limit       Maximum number of post IDs to return.
+	 * @param offset      Number of results to skip for pagination.
 	 * @return A list of post IDs ordered by the computed feed score.
 	 */
 	@Query(value = """
 			SELECT p.id
 			FROM post p
-			WHERE p.at >= TO_TIMESTAMP(:windowStartEpoch)
+			WHERE p.at >= :windowStart
 			ORDER BY (
-			        (
-			            (EXTRACT(EPOCH FROM p.at) - :windowStartEpoch) / 3600.0
-			        )
-			        * EXP(-((EXTRACT(EPOCH FROM NOW()) - EXTRACT(EPOCH FROM p.at)) / 86400.0))
+			        EXTRACT(EPOCH FROM p.at - :windowStart) / 3600.0
+			        * EXP(-(EXTRACT(EPOCH FROM NOW() - p.at) / 86400.0))
 			        * 2.0
 			    )
 			    + (LEAST(p.comment_count, 20) * 0.5)
@@ -165,7 +197,31 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			""", nativeQuery = true)
 	List<Long> fetchFeedPostIds(
 			@Param("sessionKey") String sessionKey,
-			@Param("windowStartEpoch") long windowStartEpoch,
+			@Param("windowStart") Instant windowStart,
+			@Param("limit") int limit,
+			@Param("offset") int offset);
+
+	@Query(value = """
+			SELECT p.id
+			FROM post p
+			WHERE p.at >= :windowStart
+			ORDER BY
+			    -- RECENCY (50%): Exponential decay, 48-hour half-life (older posts fade to ~6%)
+			    EXP(-(EXTRACT(EPOCH FROM :nowValue - p.at) / 3600.0) / 48.0) * 0.50
+
+			    -- ENGAGEMENT (30%): Logarithmic scale (100 comments ≈ 2.3x better than 10)
+			    + (LN(1.0 + LEAST(p.comment_count, 100)) / LN(101.0)) * 0.30
+
+			    -- SESSION RANDOMNESS (20%): Deterministic per (session, post) pair
+			    -- Maps to 0.0-1.0 range, gives ±20% variation
+			    + (((ABS(HASHTEXT(:sessionId || '-' || p.id)) % 100) / 100.0) * 0.20)
+			DESC
+			LIMIT :limit OFFSET :offset
+			""", nativeQuery = true)
+	List<Long> fetchFeedPostIds(
+			@Param("sessionId") String sessionId, // Changed from sessionRandomValue
+			@Param("windowStart") Instant windowStart,
+			@Param("nowValue") Instant nowValue,
 			@Param("limit") int limit,
 			@Param("offset") int offset);
 
