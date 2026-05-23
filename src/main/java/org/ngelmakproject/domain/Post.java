@@ -10,8 +10,6 @@ import com.fasterxml.jackson.annotation.JsonIncludeProperties;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -63,11 +61,6 @@ public class Post implements Serializable {
     private String content;
     /** The content of the post. */
 
-    @NotNull
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
-    private Status status;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JsonIncludeProperties(value = { "id", "content", "at", "channel" })
     private Post postReply;
@@ -85,18 +78,6 @@ public class Post implements Serializable {
 
     @Column(name = "comment_count")
     private Integer commentCount = 0;
-
-    /**
-     * The Status enumeration.
-     */
-    public enum Status {
-        PENDING,
-        REJECTED,
-        VALIDATED,
-        SUSPENDED,
-        DELETING,
-        NOT_QUALIFIED,
-    }
 
     /**
      * The Subject enumeration.
@@ -200,19 +181,6 @@ public class Post implements Serializable {
         this.content = content;
     }
 
-    public Status getStatus() {
-        return this.status;
-    }
-
-    public Post status(Status status) {
-        this.setStatus(status);
-        return this;
-    }
-
-    public void setStatus(Status status) {
-        this.status = status;
-    }
-
     public Set<File> getFiles() {
         return this.files;
     }
@@ -278,8 +246,6 @@ public class Post implements Serializable {
 
     @Override
     public int hashCode() {
-        // see
-        // https://vladmihalcea.com/how-to-implement-equals-and-hashcode-using-the-jpa-entity-identifier/
         return getClass().hashCode();
     }
 
@@ -293,7 +259,6 @@ public class Post implements Serializable {
                 ", lastUpdate='" + getLastUpdate() + "'" +
                 ", visible='" + getVisible() + "'" +
                 ", content='" + getContent() + "'" +
-                ", status='" + getStatus() + "'" +
                 ", reply='" + getPostReply() + "'" +
                 "}";
     }

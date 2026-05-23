@@ -8,7 +8,6 @@ import java.util.Set;
 
 import org.ngelmakproject.domain.Channel;
 import org.ngelmakproject.domain.Post;
-import org.ngelmakproject.domain.Post.Status;
 import org.ngelmakproject.repository.projection.CommentProjection;
 import org.ngelmakproject.repository.projection.PostEngagementProjection;
 import org.ngelmakproject.repository.projection.PostProjection;
@@ -59,7 +58,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			       COUNT(r) AS reactionCount
 			FROM Post p
 			LEFT JOIN Reaction r ON r.post.id = p.id
-			WHERE p.at >= :since
+			WHERE p.at >= :since AND p.visible = true AND p.deletedAt IS NULL
 			GROUP BY p.id
 			""")
 	List<PostEngagementProjection> fetchRecentEngagementMetricsByAtAfter(Instant since);
@@ -85,7 +84,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			       COUNT(r) AS reactionCount
 			FROM Post p
 			LEFT JOIN Reaction r ON r.post.id = p.id
-			WHERE p.id IN :postIds
+			WHERE p.id IN :postIds AND p.visible = true AND p.deletedAt IS NULL
 			GROUP BY p.id
 			""")
 	List<PostEngagementProjection> fetchEngagementMetricsByPostIds(List<Long> postIds);
@@ -335,12 +334,9 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			LEFT JOIN FETCH p.postReply
 			LEFT JOIN FETCH p.channel
 			LEFT JOIN FETCH p.files
-			WHERE p.channel.id = :channelId AND p.status = :status
+			WHERE p.channel.id = :channelId AND p.visible = true
 			""")
-	Slice<Post> findByChannelAndStatus(
-			@Param("channelId") Long channelId,
-			@Param("status") Status status,
-			Pageable pageable);
+	Slice<Post> findByChannelAndVisibleTrue(@Param("channelId") Long channelId, Pageable pageable);
 
 	/**
 	 * Fetches the top 5 trending posts from the specified date, ranked by
@@ -386,24 +382,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			ORDER BY (p.commentCount * 2.0 + COUNT(r)) DESC, p.at DESC
 			""")
 	List<Long> mostEngagedPosts(@Param("since") Instant since, Pageable pageable);
-
-	/**
-	 * Use an @EntityGraph to fetch channel + files in one go:
-	 * 
-	 * @param status
-	 * @param pageable
-	 * @return
-	 */
-	@EntityGraph(attributePaths = { "channel", "files" })
-	Slice<Post> findByStatusOrderByAtDesc(Status status, Pageable pageable);
-
-	@Query("""
-			SELECT p FROM Post p
-			LEFT JOIN FETCH p.channel
-			LEFT JOIN FETCH p.files
-			WHERE p.status = 'PUBLISHED'
-			""")
-	Slice<Post> findAllWithRelations(Pageable pageable);
 
 	/**
 	 * Recalculates and updates the comment count for all posts.

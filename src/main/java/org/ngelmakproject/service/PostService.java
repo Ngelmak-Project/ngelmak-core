@@ -1,8 +1,6 @@
 package org.ngelmakproject.service;
 
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -19,7 +17,6 @@ import org.ngelmakproject.domain.Channel;
 import org.ngelmakproject.domain.Feed;
 import org.ngelmakproject.domain.File;
 import org.ngelmakproject.domain.Post;
-import org.ngelmakproject.domain.Post.Status;
 import org.ngelmakproject.domain.Reaction;
 import org.ngelmakproject.repository.FeedRepository;
 import org.ngelmakproject.repository.PostRepository;
@@ -61,15 +58,9 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 @Transactional(readOnly = true)
 public class PostService {
-
     private static final Logger log = LoggerFactory.getLogger(PostService.class);
 
     private static final String ENTITY_NAME = "post";
-    // How many years back we allow the feed window to expand
-    private static final int MAX_YEARS_HISTORY = 5;
-
-    // How many days to move the window back each iteration
-    private static final int WINDOW_STEP_DAYS = 365;
 
     private final PostRepository postRepository;
     private final FileService fileService;
@@ -114,8 +105,7 @@ public class PostService {
                     // Save media files
                     List<File> files = fileService.save(medias, covers);
                     // Prepare entity
-                    post.status(Status.VALIDATED)
-                            .visible(post.getVisible() != null ? post.getVisible() : true)
+                    post.visible(post.getVisible() != null ? post.getVisible() : true)
                             .at(Instant.now())
                             .files(new HashSet<>(files))
                             .channel(channel);
@@ -163,8 +153,6 @@ public class PostService {
                         existing.setVisible(post.getVisible());
                     if (post.getContent() != null)
                         existing.setContent(post.getContent());
-                    if (post.getStatus() != null)
-                        existing.setStatus(post.getStatus());
                     existing.setLastUpdate(Instant.now());
 
                     // Save to Redis
@@ -267,9 +255,8 @@ public class PostService {
      */
     public PageDTO<PostDTO> getPostByChannel(Long channelId, Pageable pageable) {
         // 1. Fetch post entries with channels, and files
-        List<Post> posts = this.postRepository.findByChannelAndStatus(
+        List<Post> posts = this.postRepository.findByChannelAndVisibleTrue(
                 channelId,
-                Status.VALIDATED,
                 pageable).getContent();
         var postDTOs = filloutReactions(posts, channelId);
         Page<PostDTO> page = new PageImpl<>(postDTOs, pageable, postDTOs.size());
@@ -349,108 +336,6 @@ public class PostService {
                 key,
                 (int) pageable.getOffset() / pageable.getPageSize(),
                 pageable.getPageSize());
-
-        // Fetch posts with channels, files, by IDs (avoids N+1).
-        posts.addAll(postRepository.findAllByIdIn(postIds));
-        // Shuffle posts from the channels followed with those from the activity feed.
-        Collections.shuffle(posts);
-
-        /**
-         * Bulk fetch reactions for all posts in the feed to avoid N+1 queries.
-         */
-        List<Reaction> reactions = reactionRepository.findByPostIds(postIds);
-        // Group reactions by postId
-        Map<Long, List<Reaction>> reactionsByPost = ReactionService.groupReactionsByPost(reactions);
-        // Map feed entries to DTOs
-        List<PostDTO> feeds = posts.stream().map(post -> {
-            List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
-            ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions,
-                    optional.map(Channel::getId).orElse(null));
-            return PostDTO.from(post, summary);
-        }).toList();
-
-        return new FeedPageDTO<PostDTO>(feeds, sessionKey, pageable.getPageNumber(), pageable.getSort().stream()
-                .map(order -> new SortDTO(order.getProperty(), order.getDirection().name())).toList());
-    }
-
-    public FeedPageDTO<PostDTO> getFeedOld(String sessionKey, Pageable pageable) {
-        // If no session key provided → generate timestamp
-        String key = (sessionKey == null || sessionKey.isBlank())
-                ? String.valueOf(Instant.now().getEpochSecond())
-                : sessionKey;
-        /**
-         * Fetch feed entries with posts, channels, and files for the user's channel.
-         */
-        Optional<Channel> optional = channelService.findOneByCurrentUser();
-        List<Post> posts = new ArrayList<>();
-        if (optional.isPresent()) {
-            log.debug("Request to retrieve Feeds for Channel {}.", optional.get());
-            // Fetch feed entries with posts, channels, and files
-            var page = feedRepository.findByFeedOwner(optional.get(), pageable);
-            posts.addAll(page.getContent().stream().map(Feed::getPost).toList());
-        }
-
-        /**
-         * Expands the feed window in
-         * This ensures inactive users still see content while keeping the feed fresh.
-         * The final window start is persisted in Redis for future requests.
-         */
-        // Load cached window start or initialize to 1 year ago
-        Instant windowStart = postRedisService.getWindowSession(key)
-                .map(Instant::ofEpochSecond)
-                .orElseGet(() -> {
-                    Instant initial = Instant.now().minus(WINDOW_STEP_DAYS, ChronoUnit.DAYS);
-                    postRedisService.setWindowSession(key, initial.getEpochSecond());
-                    return initial;
-                });
-
-        Instant originalWindowStart = windowStart;
-
-        // First attempt with the cached window
-        List<Long> postIds = postRepository.fetchFeedPostIds(
-                key,
-                windowStart,
-                pageable.getPageSize(),
-                (int) pageable.getOffset());
-
-        // Expand window backwards only if needed
-        if (postIds.isEmpty()) {
-            // Compute the oldest allowed timestamp (5 years ago)
-            Instant oldestAllowed = LocalDate.now()
-                    .minusYears(MAX_YEARS_HISTORY)
-                    .atStartOfDay(ZoneOffset.UTC)
-                    .toInstant();
-
-            // Slide window back until we find posts or hit the limit
-            while (windowStart.isAfter(oldestAllowed) && postIds.isEmpty()) {
-                windowStart = windowStart.minus(WINDOW_STEP_DAYS, ChronoUnit.DAYS);
-                postIds = postRepository.fetchFeedPostIds(
-                        key,
-                        windowStart,
-                        pageable.getPageSize(),
-                        (int) pageable.getOffset());
-            }
-        }
-
-        boolean windowExpanded = windowStart.isBefore(originalWindowStart);
-
-        // Update Redis only if the window moved backwards
-        if (windowExpanded) {
-            postRedisService.setWindowSession(key, windowStart.getEpochSecond());
-        }
-
-        // Calculate how many years the window expanded
-        long yearsExpanded = ChronoUnit.YEARS.between(
-                windowStart.atZone(ZoneOffset.UTC).toLocalDate(),
-                originalWindowStart.atZone(ZoneOffset.UTC).toLocalDate());
-
-        log.debug(
-                "Feed fetch - totalElements: {}, page: {}, pageSize: {}, window expanded by {} year(s), expanded: {}",
-                postIds.size(),
-                pageable.getPageNumber(),
-                pageable.getPageSize(),
-                yearsExpanded,
-                windowExpanded);
 
         // Fetch posts with channels, files, by IDs (avoids N+1).
         posts.addAll(postRepository.findAllByIdIn(postIds));

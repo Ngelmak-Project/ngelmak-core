@@ -68,16 +68,10 @@ spring.devtools.livereload.port: 35743
 
 logging:
   level:
-    org.springframework.vault: DEBUG
-    # org.springframework.jdbc.datasource: DEBUG
-    # org:
-    #   hibernate:
-    #     SQL: WARN
-    #   springframework:
-    #     jdbc:
-    #       core:
-    #         JdbcTemplate: DEBUG
-    #         StatementCreatorUtils: TRACE
+    org.hibernate.SQL: INFO
+    org.hibernate.orm.jdbc.bind: INFO   # For SQL parameters (Hibernate 6+)
+    org.springframework.vault: INFO
+    org.springframework.jdbc.datasource: INFO
     org.springframework.boot.autoconfigure: INFO
 
 debug: true

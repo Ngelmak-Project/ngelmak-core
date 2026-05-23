@@ -5,7 +5,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.ngelmakproject.domain.Post;
-import org.ngelmakproject.domain.Post.Status;
 
 public record PostDTO(
         Long id,
@@ -13,7 +12,6 @@ public record PostDTO(
         Instant at,
         Instant lastUpdate,
         Boolean visibility,
-        Status status,
         ChannelDTO channel,
         Set<FileDTO> files,
         ReactionSummaryDTO reactions,
@@ -28,7 +26,6 @@ public record PostDTO(
                 p.getAt(),
                 p.getLastUpdate(),
                 p.getVisible(),
-                p.getStatus(),
                 ChannelDTO.from(p.getChannel()),
                 p.getFiles().stream().map(FileDTO::from).collect(Collectors.toSet()),
                 reactions,
