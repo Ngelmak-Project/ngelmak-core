@@ -129,6 +129,7 @@ public class PostRedisService {
      * Recompute base scores for all posts within the last 5 years
      * and update the Redis.
      */
+    @Transactional(readOnly = true)
     public void recomputeScores() {
         // Fetch engagement metrics for all posts in the last 5 years.
         List<PostEngagementProjection> engagementMetrics = postRepository.fetchRecentEngagementMetricsByAtAfter(
@@ -188,9 +189,9 @@ public class PostRedisService {
 
         // Compute final score with session randomness
         List<PostScoreRecord> scored = raw.stream()
-                .map(t -> {
-                    Long id = Long.parseLong(t.getValue());
-                    double base = t.getScore();
+                .map(r -> {
+                    Long id = Long.parseLong(r.getValue());
+                    double base = r.getScore();
                     // Deterministic randomness
                     int hash = Math.abs((sessionId + "-" + id).hashCode());
                     double randomness = (hash % 100) / 100.0;
@@ -334,10 +335,11 @@ public class PostRedisService {
      * <p>
      * Runs every 1 minute, checking for post IDs marked as "dirty" in Redis,
      * recomputing their scores based on engagement metrics, and updating the
-     * Redis ZSET accordingly. Also refreshes scores for recent posts to maintain
+     * Redis accordingly. Also refreshes scores for recent posts to maintain
      * recency relevance.
      * </p>
      */
+    @Transactional(readOnly = true)
     @Scheduled(fixedRate = 1, timeUnit = TimeUnit.MINUTES)
     public void recomputeScoresSmart() {
         boolean redisEmpty = redis.opsForZSet().size(REDIS_FEED_KEY) == 0;
