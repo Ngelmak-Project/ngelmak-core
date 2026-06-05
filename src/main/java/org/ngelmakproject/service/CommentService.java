@@ -71,7 +71,7 @@ public class CommentService {
      * @throws ChannelNotFoundException if the current user has no associated
      *                                  channel
      */
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = false) // must be transactional to save media and update counters
     public Comment save(Comment comment, Optional<MultipartFile> media) {
         log.debug("Request to save Comment : {} | {} file(s)",
                 comment, media.isPresent() ? 1 : 0);
@@ -126,7 +126,7 @@ public class CommentService {
      * @throws ChannelNotFoundException            if the current user has no
      *                                             associated channel
      */
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = false) // must be transactional to save media and update the comment
     public Comment update(Comment comment, Optional<MultipartFile> media, Optional<File> deletedFile) {
         log.debug("Request to update Comment : {} | {} file(s)",
                 comment, media.isPresent() ? 1 : 0);
@@ -262,7 +262,7 @@ public class CommentService {
      * projections and batch operations for maximum efficiency.
      * </p>
      */
-    @Transactional
+    @Transactional(readOnly = false)
     @Scheduled(cron = "0 0 3 * * *") // every day at 3 AM
     public void purgeDeletedComments() {
         Instant cutoff = Instant.now().minus(7, ChronoUnit.DAYS);

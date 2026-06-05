@@ -94,6 +94,7 @@ public class PostService {
      * @param covers cover images attached to the post
      * @return the persisted Post
      */
+    @Transactional(readOnly = false)
     public Post save(Post post, List<MultipartFile> medias, List<MultipartFile> covers) {
         log.debug("Request to save Post : {} | {}x file(s) and {}x cover(s)",
                 post, medias.size(), covers.size());
@@ -126,6 +127,7 @@ public class PostService {
      * @param covers        new cover files to add
      * @return the updated Post
      */
+    @Transactional(readOnly = false)
     public Post update(Post post, List<File> deletedMedias,
             List<MultipartFile> medias, List<MultipartFile> covers) {
         log.debug("Request to update Post : {} | {}x file(s), {}x cover(s), {}x to delete", post, medias.size(),
