@@ -53,16 +53,20 @@ public class SeaweedFsService {
     /**
      * Upload multiple files to SeaweedFS Filer.
      * 
-     * @param files    Array of files to upload
-     * @param basePath The base path in the filer where files should be stored (e.g.,
-     *                 /public)
+     * @param files     Array of files to upload
+     * @param filenames Array of filenames corresponding to the files (must be same
+     *                  length as files array)
+     * @param basePath  The base path in the filer where files should be stored
+     *                  (e.g.,
+     *                  /public)
      * @return A Mono containing a list of URLs of the uploaded files
      */
-    public Mono<List<String>> uploadFiles(MultipartFile[] files, String basePath) {
+    public Mono<List<String>> uploadFiles(MultipartFile[] files, String[] filenames, String basePath) {
         log.debug("Uploading {} files to SeaweedFS at base path {}", files.length, basePath);
-        return Flux.fromArray(files)
-                .flatMap(file -> {
-                    String filePath = basePath + "/" + file.getOriginalFilename();
+        return Flux.range(0, files.length)
+                .flatMap(i -> {
+                    MultipartFile file = files[i];
+                    String filePath = basePath + "/" + filenames[i];
                     return uploadFile(file, filePath);
                 })
                 .collectList();

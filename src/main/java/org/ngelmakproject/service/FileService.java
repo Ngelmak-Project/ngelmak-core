@@ -57,70 +57,6 @@ public class FileService {
         return save(medias, Collections.nCopies(medias.size(), null));
     }
 
-    public List<File> saveOld(List<MultipartFile> medias, List<MultipartFile> covers) {
-        log.debug("Request to save {}x file(s) and {}x cover(s)", medias.size(), covers.size());
-        if (medias.isEmpty()) {
-            return List.of();
-        }
-
-        List<File> prepared = new ArrayList<>();
-        Map<String, MultipartFile> hashToMultipart = new HashMap<>();
-
-        for (int i = 0; i < medias.size(); i++) {
-            // MEDIA
-            MultipartFile mediaPart = medias.get(i);
-            File media = fromMultipartToFile(mediaPart);
-            prepared.add(media);
-            hashToMultipart.put(media.getHash(), mediaPart);
-
-            // COVER
-            MultipartFile coverPart = covers.get(i);
-            if (coverPart != null && !coverPart.isEmpty()) {
-                File cover = fromMultipartToFile(coverPart);
-                media.setCover(cover);
-                prepared.add(cover);
-                hashToMultipart.put(cover.getHash(), coverPart);
-            }
-        }
-
-        // Load existing files by hash
-        Map<String, File> existing = fileRepository.findByHashIn(hashToMultipart.keySet())
-                .stream()
-                .collect(Collectors.toMap(File::getHash, f -> f));
-
-        // Persist only new files
-        List<File> newFiles = prepared.stream()
-                .filter(f -> !existing.containsKey(f.getHash()))
-                .map(f -> {
-                    MultipartFile part = hashToMultipart.get(f.getHash());
-
-                    // Upload to SeaweedFS
-                    String path = "/public/" + f.getFilename();
-                    // Upload to SeaweedFS and get internal URL (blocking for simplicity; can be
-                    // optimized with async if needed)
-                    String internalUrl = seaweedFsService.uploadFile(part, path).block();
-                    // Build public URL (for clients)
-                    String publicUrl = publicBaseUrl + path;
-
-                    f.setUrl(publicUrl); // what clients use
-                    f.setInternalUrl(internalUrl); // optional: store for backend use
-                    f.setCreatedAt(Instant.now());
-                    return f;
-                })
-                .map(fileRepository::save)
-                .toList();
-
-        // Combine new + existing
-        List<File> result = new ArrayList<>(newFiles);
-        result.addAll(existing.values());
-
-        // Batch increment usageCount
-        List<Long> ids = result.stream().map(File::getId).toList();
-        fileRepository.incrementUsageCount(ids);
-
-        return result;
-    }
-
     /**
      * Saves uploaded media files with their corresponding covers, with
      * deduplication.
@@ -180,8 +116,11 @@ public class FileService {
                             .orElseThrow();
                 })
                 .toArray(MultipartFile[]::new);
+        String[] paths = newFiles.stream()
+                .map(File::getFilename)
+                .toArray(String[]::new);
 
-        List<String> internalUrls = seaweedFsService.uploadFiles(newParts, "/public")
+        List<String> internalUrls = seaweedFsService.uploadFiles(newParts, paths, "/public")
                 .block(); // only blocking point
 
         // Assign URLs and save
