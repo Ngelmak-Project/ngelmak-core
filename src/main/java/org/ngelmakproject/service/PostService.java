@@ -56,7 +56,7 @@ import org.springframework.web.multipart.MultipartFile;
  * </p>
  */
 @Service
-@Transactional(readOnly = true)
+@Transactional
 public class PostService {
     private static final Logger log = LoggerFactory.getLogger(PostService.class);
 
@@ -94,7 +94,7 @@ public class PostService {
      * @param covers cover images attached to the post
      * @return the persisted Post
      */
-    @Transactional(readOnly = false)
+    @Transactional(readOnly = false) // override default readOnly for write operation
     public Post save(Post post, List<MultipartFile> medias, List<MultipartFile> covers) {
         log.debug("Request to save Post : {} | {}x file(s) and {}x cover(s)",
                 post, medias.size(), covers.size());
@@ -127,7 +127,7 @@ public class PostService {
      * @param covers        new cover files to add
      * @return the updated Post
      */
-    @Transactional(readOnly = false)
+    @Transactional(readOnly = false) // override default readOnly for write operation
     public Post update(Post post, List<File> deletedMedias,
             List<MultipartFile> medias, List<MultipartFile> covers) {
         log.debug("Request to update Post : {} | {}x file(s), {}x cover(s), {}x to delete", post, medias.size(),
