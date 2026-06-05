@@ -7,10 +7,6 @@ services:
       - "5742:5742"
     volumes:
       - ./data/storage:/ngelmak/ngelmak-core/static/uploads/storage
-    depends_on:
-      - ngelmak-pgdb # PostgreSQL database
-      - ngelmak-redis # Redis for caching
-      - filer # SeaweedFS Filer service
     restart: on-failure:5
     networks:
       - ngelmak-net
