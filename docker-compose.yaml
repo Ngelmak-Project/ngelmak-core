@@ -7,7 +7,7 @@ services:
       - "5742:5742"
     volumes:
       - ./data/storage:/ngelmak/ngelmak-core/static/uploads/storage
-    restart: unless-stopped
+    restart: on-failure:5
     networks:
       - ngelmak-net
 
