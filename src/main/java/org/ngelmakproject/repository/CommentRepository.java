@@ -19,59 +19,17 @@ import org.springframework.stereotype.Repository;
 /**
  * Spring Data JPA repository for the Comment entity.
  */
-@SuppressWarnings("unused")
 @Repository
+@SuppressWarnings("unused")
 public interface CommentRepository extends JpaRepository<Comment, Long> {
-	// @Query("""
-	// SELECT c FROM Comment c
-	// LEFT JOIN FETCH c.channel
-	// LEFT JOIN FETCH c.file
-	// WHERE c.post.id = :id
-	// AND c.deletedAt IS NULL
-	// ORDER BY c.at
-	// """)
-	// Slice<Comment> findByPostOrderByAt(@Param("id") Long id, Pageable
-	// pageable);
-
-	// @Query("""
-	// select new Comment(
-	// c.id,
-	// c.opinion,
-	// c.at,
-	// c.lastUpdate,
-	// c.deletedAt,
-	// c.content,
-	// c.url,
-	// c.post,
-	// c.replayto,
-	// c.channel
-	// )
-	// from Comment c
-	// where c.id = :id
-	// """)
-	// Optional<Comment> findById(@Param("id") Long id);
-
-	// @Modifying
-	// @Query("update Comment c set c.content = :content and c.url = :url where
-	// u.id < :id")
-	// void update(@Param("id") Long id, @Param("content") String content,
-	// @Param("url") String url);
-
-	@Query(value = """
-			SELECT c.*
-			FROM post p
-			JOIN LATERAL (
-			    SELECT *
-			    FROM comment c
-			    WHERE c.post_id = p.id
-			    ORDER BY c.at DESC
-			    LIMIT :limit
-			) c ON TRUE
-			WHERE p.id IN :postIds
-			ORDER BY p.id, c.at DESC
-			""", nativeQuery = true)
-	List<Comment> findTopCommentsForPosts(@Param("postIds") List<Long> postIds, @Param("limit") Integer limit);
-
+	/**
+	 * Finds top-level comments for a given post, ordered by creation time in
+	 * descending order.
+	 * 
+	 * @param postId   the ID of the post to find comments for
+	 * @param pageable the pagination information
+	 * @return the slice of top-level comments
+	 */
 	@Query("""
 			SELECT c FROM Comment c
 			LEFT JOIN FETCH c.post
@@ -82,6 +40,14 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 			""")
 	Slice<Comment> findTopLevelCommentsByPost(@Param("postId") Long postId, Pageable pageable);
 
+	/**
+	 * Finds top-level comments for a given channel, ordered by creation time in
+	 * descending order.
+	 * 
+	 * @param channelId the ID of the channel to find comments for
+	 * @param pageable  the pagination information
+	 * @return the slice of top-level comments
+	 */
 	@Query("""
 			SELECT c FROM Comment c
 			LEFT JOIN FETCH c.post
@@ -92,6 +58,13 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 			""")
 	Slice<Comment> findCommentsByChannelOrByAtDesc(@Param("channelId") Long channelId, Pageable pageable);
 
+	/**
+	 * Finds replies to a specific comment, ordered by creation time in ascending
+	 * order.
+	 * 
+	 * @param commentId the ID of the comment to find replies for
+	 * @return the list of replies to the specified comment
+	 */
 	@Query("""
 			SELECT c FROM Comment c
 			LEFT JOIN FETCH c.channel
@@ -101,6 +74,13 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 			""")
 	List<Comment> findRepliesByComment(@Param("commentId") Long commentId);
 
+	/**
+	 * Finds comments by a set of IDs, including their associated post, channel, and
+	 * file entities.
+	 * 
+	 * @param ids the set of comment IDs to find
+	 * @return the list of comments matching the specified IDs
+	 */
 	@Modifying
 	@Query("""
 			UPDATE Comment c
@@ -210,10 +190,24 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 			""")
 	void updateReplyCountByReplyIds(@Param("replyIds") Set<Long> replyIds);
 
+	/**
+	 * Soft-deletes a comment by its ID.
+	 *
+	 * @param id the ID of the comment to soft-delete
+	 * @param ts the timestamp to set as the deletion time
+	 * @return the number of comments that were soft-deleted (0 or 1)
+	 */
 	@Modifying
 	@Query("UPDATE Comment c SET c.deletedAt = :ts WHERE c.id = :id")
 	int softDeleteById(@Param("id") Long id, @Param("ts") Instant ts);
 
+	/**
+	 * Soft-deletes comments by their IDs.
+	 *
+	 * @param ids the IDs of the comments to soft-delete
+	 * @param ts  the timestamp to set as the deletion time
+	 * @return the number of comments that were soft-deleted
+	 */
 	@Modifying
 	@Query("UPDATE Comment c SET c.deletedAt = :ts WHERE c.id IN :ids")
 	int softDeleteByIds(Set<Long> ids, @Param("ts") Instant ts);
@@ -230,12 +224,23 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 	@Query("DELETE FROM Comment c WHERE c.deletedAt < :cutoff")
 	int deleteExpiredComments(Instant cutoff);
 
+	/**
+	 * Finds comments that have been soft-deleted and are past the expiration
+	 * cutoff.
+	 *
+	 * @param cutoff the timestamp before which soft-deleted comments are considered
+	 *               expired
+	 * @return a list of comment projections for expired comments
+	 */
 	@Query("SELECT c FROM Comment c WHERE c.deletedAt < :cutoff")
 	List<CommentProjection> findExpiredComments(Instant cutoff);
 
-	@EntityGraph(attributePaths = { "post", "replyTo" })
-	Optional<Comment> findWithPostAndReplyToById(Long id);
-
+	/**
+	 * Finds a comment by its ID and returns it as a projection.
+	 *
+	 * @param id the ID of the comment to find
+	 * @return an Optional containing the comment projection if found, or empty if
+	 *         not found
+	 */
 	Optional<CommentProjection> findProjectedById(Long id);
-
 }

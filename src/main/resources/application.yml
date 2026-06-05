@@ -76,20 +76,20 @@ logging:
 
 debug: true
 
+# ================================
+# SeaweedFS Storage Configuration
+# ================================
 
-# Physical storage location (deduplicated)
+# URL of the SeaweedFS Filer service.
+# Must include a valid scheme (http:// or https://).
+# This is the internal address your backend uses to talk to SeaweedFS.
+seaweedfs:
+  filer:
+    url: http://filer:9555 # Example: http://filer:9555 (filer container) or http://localhost:9555
+
+# Base public URL used to generate file download/view links.
+# This is what clients (browsers, mobile apps, external users) will see.
+# Typically routed through a reverse proxy, CDN, or domain.
 file:
-  upload-directory:
-    # Absolute path where files are physically stored
-    location: /ngelmak/ngelmak-core/static/uploads/storage
   public:
-    # Public URL prefix (what users see)
-    access.location: /public
-  private:
-    access.location: /private
-
-gateway:
-  public:
-    host: api.ngelmak.org
-    protocol: https
-    port: 443
+    base-url: https://storage.ngelmak.org

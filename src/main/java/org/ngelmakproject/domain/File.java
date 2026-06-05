@@ -47,6 +47,10 @@ public class File implements Serializable {
     @Column(name = "url")
     private String url;
 
+    @JsonIgnore
+    @Column(name = "internal_url")
+    private String internalUrl;
+
     @Column(name = "type")
     private String type;
 
@@ -112,6 +116,14 @@ public class File implements Serializable {
 
     public void setUrl(String url) {
         this.url = url;
+    }
+
+    public String getInternalUrl() {
+        return internalUrl;
+    }
+
+    public void setInternalUrl(String internalUrl) {
+        this.internalUrl = internalUrl;
     }
 
     public String getType() {

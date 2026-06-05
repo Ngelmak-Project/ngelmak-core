@@ -6,9 +6,9 @@ import java.util.Optional;
 
 import org.ngelmakproject.domain.Channel;
 import org.ngelmakproject.repository.projection.ActiveChannelProjection;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -16,12 +16,17 @@ import org.springframework.stereotype.Repository;
 /**
  * Spring Data JPA repository for the Channel entity.
  */
-@SuppressWarnings("unused")
 @Repository
+@SuppressWarnings("unused")
 public interface ChannelRepository extends JpaRepository<Channel, Long> {
-    @Cacheable(value = "channel", key = "#id")
 	Optional<Channel> findOneByUser(Long id);
 
+	/**
+	 * Retrieves a channel by its unique identifier.
+	 *
+	 * @param identifier the unique identifier of the channel
+	 * @return an Optional containing the Channel if found, or empty if not found
+	 */
 	Optional<Channel> findOneByIdentifier(String identifier);
 
 	Boolean existsByIdentifier(String identifier);
@@ -51,9 +56,18 @@ public interface ChannelRepository extends JpaRepository<Channel, Long> {
 			ON p.channel.id = c.id AND p.at >= :since
 			GROUP BY c.id
 			HAVING COUNT(p.id) > 0
-			ORDER BY COUNT(p.id)
-			DESC, c.createdAt ASC
+			ORDER BY COUNT(p.id) DESC, c.createdAt ASC
 			""")
 	List<ActiveChannelProjection> topActiveChannels(@Param("since") Instant since, Pageable pageable);
 
+
+	/**
+	 * Soft-deletes channel by ID.
+	 *
+	 * @param id the ID of the channel to soft-delete
+	 * @return the number of channels that were soft-deleted
+	 */
+	@Modifying
+	@Query("UPDATE Channel c SET c.deletedAt = :ts WHERE c.id = :id")
+	int softDeleteById(Long id, Instant ts);
 }

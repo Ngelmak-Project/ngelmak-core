@@ -1,6 +1,5 @@
 package org.ngelmakproject.service;
 
-import java.net.URL;
 import java.security.MessageDigest;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -10,14 +9,16 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.ngelmakproject.domain.File;
 import org.ngelmakproject.repository.FileRepository;
 import org.ngelmakproject.repository.projection.FileProjection;
-import org.ngelmakproject.service.storage.FileStorageService;
+import org.ngelmakproject.service.storage.SeaweedFsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,50 +34,30 @@ public class FileService {
 
     private static final Logger log = LoggerFactory.getLogger(FileService.class);
 
+    @Value("${file.public.base-url}")
+    private String publicBaseUrl;
+
     private final FileRepository fileRepository;
-    private final FileStorageService fileStorageService;
+    private final SeaweedFsService seaweedFsService;
 
     public FileService(FileRepository fileRepository,
-            FileStorageService fileStorageService) {
+            SeaweedFsService seaweedFsService) {
         this.fileRepository = fileRepository;
-        this.fileStorageService = fileStorageService;
+        this.seaweedFsService = seaweedFsService;
     }
 
     /**
-     * Saves uploaded media files with deduplication.
-     *
-     * <p>
-     * Computes a hash for each upload.
-     * Reuses existing File entries when hashes match.
-     * Stores only new files on disk and persists them.
-     * Increments usageCount for every returned file.
-     * <\p>
-     *
-     * @param medias uploaded multipart files
-     * @return list of File entities (existing + newly saved)
+     * Saves uploaded media files without covers, with deduplication.
+     * 
+     * @param medias List of media files (required)
+     * @return List of saved File entities (media only)
      */
     public List<File> save(List<MultipartFile> medias) {
         log.debug("Request to save {}x file(s)", medias.size());
         return save(medias, Collections.nCopies(medias.size(), null));
     }
 
-    /**
-     * Saves media files and their optional covers with deduplication.
-     *
-     * <p>
-     * Computes a hash for each media and cover.
-     * Reuses existing File entries when hashes match.
-     * Stores only new files on disk and persists them.
-     * Links each media to its cover when provided.
-     * Batch‑increments usageCount for all returned files.
-     * <\p>
-     *
-     * @param medias list of media files
-     * @param covers list of cover files (same size as medias, may contain
-     *               null/empty entries)
-     * @return list of File entities (existing + newly saved)
-     */
-    public List<File> save(List<MultipartFile> medias, List<MultipartFile> covers) {
+    public List<File> saveOld(List<MultipartFile> medias, List<MultipartFile> covers) {
         log.debug("Request to save {}x file(s) and {}x cover(s)", medias.size(), covers.size());
         if (medias.isEmpty()) {
             return List.of();
@@ -92,7 +73,7 @@ public class FileService {
             prepared.add(media);
             hashToMultipart.put(media.getHash(), mediaPart);
 
-            // COVER (optional)
+            // COVER
             MultipartFile coverPart = covers.get(i);
             if (coverPart != null && !coverPart.isEmpty()) {
                 File cover = fromMultipartToFile(coverPart);
@@ -111,8 +92,18 @@ public class FileService {
         List<File> newFiles = prepared.stream()
                 .filter(f -> !existing.containsKey(f.getHash()))
                 .map(f -> {
-                    URL url = fileStorageService.store(hashToMultipart.get(f.getHash()), true, f.getFilename());
-                    f.setUrl(url.toString());
+                    MultipartFile part = hashToMultipart.get(f.getHash());
+
+                    // Upload to SeaweedFS
+                    String path = "/public/" + f.getFilename();
+                    // Upload to SeaweedFS and get internal URL (blocking for simplicity; can be
+                    // optimized with async if needed)
+                    String internalUrl = seaweedFsService.uploadFile(part, path).block();
+                    // Build public URL (for clients)
+                    String publicUrl = publicBaseUrl + path;
+
+                    f.setUrl(publicUrl); // what clients use
+                    f.setInternalUrl(internalUrl); // optional: store for backend use
                     f.setCreatedAt(Instant.now());
                     return f;
                 })
@@ -130,6 +121,101 @@ public class FileService {
         return result;
     }
 
+    /**
+     * Saves uploaded media files with their corresponding covers, with
+     * deduplication.
+     * 
+     * @param medias List of media files (required)
+     * @param covers List of cover files (optional, can contain nulls)
+     * @return List of saved File entities (media + covers)
+     */
+    public List<File> save(List<MultipartFile> medias, List<MultipartFile> covers) {
+        log.debug("Request to save {}x file(s) and {}x cover(s)", medias.size(), covers.size());
+        if (medias.isEmpty()) {
+            return List.of();
+        }
+
+        Instant now = Instant.now();
+
+        // Build list of all parts (media + cover)
+        List<MultipartFile> allParts = new ArrayList<>();
+        List<File> prepared = new ArrayList<>();
+
+        for (int i = 0; i < medias.size(); i++) {
+            MultipartFile mediaPart = medias.get(i);
+            File media = fromMultipartToFile(mediaPart);
+            prepared.add(media);
+            allParts.add(mediaPart);
+
+            MultipartFile coverPart = covers.get(i);
+            if (coverPart != null && !coverPart.isEmpty()) {
+                File cover = fromMultipartToFile(coverPart);
+                media.setCover(cover);
+                prepared.add(cover);
+                allParts.add(coverPart);
+            }
+        }
+
+        // Load existing files by hash
+        Set<String> hashes = prepared.stream()
+                .map(File::getHash)
+                .collect(Collectors.toSet());
+
+        Map<String, File> existing = fileRepository.findByHashIn(hashes)
+                .stream()
+                .collect(Collectors.toMap(File::getHash, f -> f));
+
+        // Filter new files
+        List<File> newFiles = prepared.stream()
+                .filter(f -> !existing.containsKey(f.getHash()))
+                .toList();
+
+        // Upload new files in batch using your uploadFiles()
+        MultipartFile[] newParts = newFiles.stream()
+                .map(f -> {
+                    // find matching multipart
+                    return allParts.stream()
+                            .filter(p -> computeHash(p).equals(f.getHash()))
+                            .findFirst()
+                            .orElseThrow();
+                })
+                .toArray(MultipartFile[]::new);
+
+        List<String> internalUrls = seaweedFsService.uploadFiles(newParts, "/public")
+                .block(); // only blocking point
+
+        // Assign URLs and save
+        for (int i = 0; i < newFiles.size(); i++) {
+            File f = newFiles.get(i);
+            String internalUrl = internalUrls.get(i);
+
+            String path = "/public/" + f.getFilename();
+            f.setInternalUrl(internalUrl);
+            f.setUrl(publicBaseUrl + path);
+            f.setCreatedAt(now);
+
+            fileRepository.save(f);
+        }
+
+        // Combine new + existing
+        List<File> result = new ArrayList<>(newFiles);
+        result.addAll(existing.values());
+
+        // Increment usage count
+        List<Long> ids = result.stream().map(File::getId).toList();
+        fileRepository.incrementUsageCount(ids);
+
+        return result;
+    }
+
+    /**
+     * Saves files from given URLs with deduplication. Used for external media
+     * (e.g. YouTube thumbnails).
+     * 
+     * @param mediaUrls List of media URLs (required)
+     * @param coverUrls List of cover URLs (optional, can contain nulls)
+     * @return List of saved File entities (media + covers)
+     */
     public List<File> saveFromUrls(List<String> mediaUrls, List<String> coverUrls) {
         log.debug("Request to save {}x file(s) and {}x cover(s)", mediaUrls.size(), coverUrls.size());
         if (mediaUrls.isEmpty()) {
@@ -142,11 +228,11 @@ public class FileService {
         for (int i = 0; i < mediaUrls.size(); i++) {
             // MEDIA
             String mediaUrl = mediaUrls.get(i);
-            File media = fromUrlToFile(mediaUrl); // New method - see below
+            File media = fromUrlToFile(mediaUrl);
             prepared.add(media);
             hashToUrl.put(media.getHash(), mediaUrl);
 
-            // COVER (optional)
+            // COVER
             String coverUrl = coverUrls.get(i);
             if (coverUrl != null && !coverUrl.isBlank()) {
                 File cover = fromUrlToFile(coverUrl);
@@ -161,112 +247,95 @@ public class FileService {
                 .stream()
                 .collect(Collectors.toMap(File::getHash, f -> f));
 
-        // Persist only new files (without downloading)
+        // Persist only new files
         List<File> newFiles = prepared.stream()
                 .filter(f -> !existing.containsKey(f.getHash()))
                 .map(f -> {
-                    f.setUrl(hashToUrl.get(f.getHash())); // Set URL directly
+                    f.setUrl(hashToUrl.get(f.getHash()));
                     f.setCreatedAt(Instant.now());
                     return f;
                 })
                 .map(fileRepository::save)
                 .toList();
 
-        // Combine new + existing
         List<File> result = new ArrayList<>(newFiles);
         result.addAll(existing.values());
 
-        // Batch increment usageCount
         List<Long> ids = result.stream().map(File::getId).toList();
         fileRepository.incrementUsageCount(ids);
 
         return result;
     }
 
-    private File fromUrlToFile(String url) {
-        String filename = url.replaceAll(".*/", "").split("[?#]")[0];
-        File file = new File();
-        file.setFilename(filename);
-        file.setUrl(url);
-        file.setHash(url);
-        file.setSize(0L); // You don't know the size without downloading
-        return file;
-    }
-
     /**
-     * Marks the given files for deletion by decrementing their usage count.
-     * Actual removal is handled later by the cleanup cron.
-     * 
-     * @param files to delete
-     */
-    public void delete(List<File> files) {
-        log.debug("Request to delete Files : {}", files);
-        deleteByIds(files.stream().map(File::getId).toList());
-    }
-
-    /**
-     * Marks the given files for deletion by decrementing their usage count.
-     * Actual removal is handled later by the cleanup cron.
-     * 
-     * @param files to delete
+     * Deletes files by their URLs.
+     *
+     * @param urls List of file URLs to delete
      */
     public void deleteByUrls(List<String> urls) {
-        log.debug("Request to delete Files with urls: {}", urls);
         var files = fileRepository.findByUrlIn(urls);
         delete(files);
     }
 
     /**
-     * Decrements usageCount for all given file IDs.
-     * Files reaching usageCount = 0 become eligible for cleanup.
-     * 
-     * [TODO] Use redis to make the deletion asynchrone.
-     * 
-     * @param fileIds id of Files to delete.
+     * Deletes the specified files.
+     *
+     * @param files List of files to delete
+     */
+    public void delete(List<File> files) {
+        deleteByIds(files.stream().map(File::getId).toList());
+    }
+
+    /**
+     * Decrements usage count for given file IDs. Actual deletion happens in
+     * cleanup schedule when usageCount reaches 0.
+     *
+     * @param fileIds List of file IDs to mark for deletion
      */
     public void deleteByIds(List<Long> fileIds) {
+        log.debug("Request to delete files with IDs: {}", fileIds);
         fileRepository.decrementUsageCount(fileIds);
     }
 
     /**
-     * Periodic cleanup of files no longer referenced.
-     *
-     * <p>
-     * Selects files with usageCount = 0.
-     * Deletes the physical file from storage.
-     * Removes the corresponding File rows.
-     * <\p>
+     * Cleanup unused files: delete from SeaweedFS + DB.
      */
-    @Scheduled(cron = "0 0 3 * * *") // every day at 3 AM
+    @Scheduled(cron = "0 0 3 * * *")
     @Transactional
     public void cleanupUnusedFiles() {
         log.warn("Launching the cleanup schedule for unused files");
 
-        // Get all unused files
         List<FileProjection> unusedFiles = fileRepository.findUnusedFiles();
         if (unusedFiles.isEmpty()) {
             return;
         }
 
-        // Delete physical files
-        unusedFiles.forEach(f -> fileStorageService.delete(f.getUrl()));
+        // Delete from SeaweedFS
+        seaweedFsService.deleteFiles(unusedFiles.stream().map(FileProjection::getInternalUrl).toList())
+                .block(); // Blocking for simplicity; can be optimized with async if needed
 
-        // Delete database entries
+        // Delete DB entries
         fileRepository.deleteUnusedFiles(
                 unusedFiles.stream().map(FileProjection::getId).toList());
-        log.debug("A total of {}x Files are deleted", unusedFiles.size());
     }
 
+    /**
+     * Converts a multipart file to a File entity.
+     *
+     * @param media The multipart file to convert
+     * @return The converted File entity
+     */
     private File fromMultipartToFile(MultipartFile media) {
         String name = media.getOriginalFilename();
         String ext = (name != null && name.contains(".")) ? name.substring(name.lastIndexOf('.') + 1).toLowerCase()
                 : "";
+
         File file = new File();
         String hash = computeHash(media);
-        // Format name
-        String date = LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE); // yyyyMMdd
+
+        String date = LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE);
         String shortHash = hash.substring(0, 8);
-        String filename = "-" + date + "-" + shortHash + "." + ext;
+        String filename = String.format("nk_%s_%s.%s", date, shortHash, ext);
 
         file.setHash(hash);
         file.setFilename(filename);
@@ -275,6 +344,29 @@ public class FileService {
         return file;
     }
 
+    /**
+     * Converts a URL to a File entity. Used for external media (e.g. YouTube
+     * thumbnails).
+     *
+     * @param url The URL to convert
+     * @return The converted File entity
+     */
+    private File fromUrlToFile(String url) {
+        String filename = url.replaceAll(".*/", "").split("[?#]")[0];
+        File file = new File();
+        file.setFilename(filename);
+        file.setUrl(url);
+        file.setHash(url);
+        file.setSize(0L);
+        return file;
+    }
+
+    /**
+     * Computes a SHA-256 hash of the file content for deduplication.
+     *
+     * @param file The multipart file to hash
+     * @return The computed hash as a hex string
+     */
     private String computeHash(MultipartFile file) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

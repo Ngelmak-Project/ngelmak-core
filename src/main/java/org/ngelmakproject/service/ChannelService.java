@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Optional;
 
 import org.ngelmakproject.domain.Channel;
-import org.ngelmakproject.domain.Post;
 import org.ngelmakproject.domain.Subscription;
 import org.ngelmakproject.repository.ChannelRepository;
 import org.ngelmakproject.repository.SubscriptionRepository;
@@ -267,7 +266,7 @@ public class ChannelService {
      */
     public void delete(Long id) {
         log.debug("Request to delete Channel : {}", id);
-        channelRepository.deleteById(id);
+        channelRepository.softDeleteById(id, Instant.now());
     }
 
     /**

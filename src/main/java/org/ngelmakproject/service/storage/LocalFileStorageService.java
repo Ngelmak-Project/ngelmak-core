@@ -10,10 +10,11 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.stream.Stream;
 
+import org.ngelmakproject.service.storage.exceptions.StorageException;
+import org.ngelmakproject.service.storage.exceptions.StorageFileNotFoundException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
-import org.springframework.stereotype.Service;
 import org.springframework.util.FileSystemUtils;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -25,23 +26,22 @@ import org.springframework.web.multipart.MultipartFile;
  * 
  * @author yusufaye
  */
-@Service
-public class FileStorageService {
+public class LocalFileStorageService {
 
-  @Value("${file.upload-directory.location}")
+  // @Value("${file.upload-directory.location}")
   private String location;
-  @Value("${file.public.access.location}")
+  // @Value("${file.public.access.location}")
   private String publicAccessLocation;
-  @Value("${file.private.access.location}")
+  // @Value("${file.private.access.location}")
   private String privateAccessLocation;
 
-  @Value("${gateway.public.host}")
+  // @Value("${gateway.public.host}")
   private String gatewayHost;
 
-  @Value("${gateway.public.port}")
+  // @Value("${gateway.public.port}")
   private Integer gatewayPort;
 
-  @Value("${gateway.public.protocol}")
+  // @Value("${gateway.public.protocol}")
   private String gatewayProtocol;
 
   public Path root(String... dirs) {

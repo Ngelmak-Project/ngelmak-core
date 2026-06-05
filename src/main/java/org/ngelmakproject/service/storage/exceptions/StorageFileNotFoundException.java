@@ -1,4 +1,4 @@
-package org.ngelmakproject.service.storage;
+package org.ngelmakproject.service.storage.exceptions;
 
 public class StorageFileNotFoundException extends StorageException {
 

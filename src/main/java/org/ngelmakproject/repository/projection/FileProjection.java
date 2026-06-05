@@ -15,6 +15,8 @@ public interface FileProjection {
 
     public String getUrl();
 
+    public String getInternalUrl();
+
     public String getType();
 
     public Integer getUsageCount();

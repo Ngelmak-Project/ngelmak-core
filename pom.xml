@@ -125,6 +125,12 @@
 			<!-- No specific version; ensure compatibility with Spring Cloud version -->
 		</dependency>
 
+		<!-- Spring WebFlux for reactive web applications -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webflux</artifactId>
+		</dependency>
+
 		<!-- Database Dependencies -->
 		<dependency>
 			<!-- Spring Data JPA for database access. -->
