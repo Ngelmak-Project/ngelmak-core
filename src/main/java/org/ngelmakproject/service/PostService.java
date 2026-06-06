@@ -161,7 +161,7 @@ public class PostService {
                     postRedisService.queueUpdate(post);
 
                     // Delete removed files (irreversible)
-                    fileService.delete(deletedMedias);
+                    fileService.deleteByIds(deletedMedias.stream().map(File::getId).toList());
                     return existing;
                 })
                 .orElseThrow(

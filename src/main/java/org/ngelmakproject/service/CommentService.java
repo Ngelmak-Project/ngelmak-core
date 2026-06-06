@@ -150,7 +150,7 @@ public class CommentService {
         // Handle media update
         if (media.isPresent()) {
             List<File> newFiles = fileService.save(List.of(media.get()));
-            deletedFile.ifPresent(file -> fileService.delete(List.of(file)));
+            deletedFile.ifPresent(file -> fileService.deleteByIds(List.of(file.getId())));
             existing.setFile(newFiles.stream().findFirst().orElse(null));
         }
         // Save to Redis

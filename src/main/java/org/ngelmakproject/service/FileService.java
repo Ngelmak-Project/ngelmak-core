@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 import org.ngelmakproject.domain.File;
 import org.ngelmakproject.repository.FileRepository;
 import org.ngelmakproject.repository.projection.FileProjection;
+import org.ngelmakproject.service.cache.FileRedisService;
 import org.ngelmakproject.service.storage.SeaweedFsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,11 +39,14 @@ public class FileService {
     private String publicBaseUrl;
 
     private final FileRepository fileRepository;
+    private final FileRedisService fileRedisService;
     private final SeaweedFsService seaweedFsService;
 
     public FileService(FileRepository fileRepository,
+            FileRedisService fileRedisService,
             SeaweedFsService seaweedFsService) {
         this.fileRepository = fileRepository;
+        this.fileRedisService = fileRedisService;
         this.seaweedFsService = seaweedFsService;
     }
 
@@ -141,8 +145,7 @@ public class FileService {
         result.addAll(existing.values());
 
         // Increment usage count
-        List<Long> ids = result.stream().map(File::getId).toList();
-        fileRepository.incrementUsageCount(ids);
+        result.stream().map(File::getId).forEach(id -> fileRedisService.queueUsageCount(id, 1));
 
         return result;
     }
@@ -200,8 +203,7 @@ public class FileService {
         List<File> result = new ArrayList<>(newFiles);
         result.addAll(existing.values());
 
-        List<Long> ids = result.stream().map(File::getId).toList();
-        fileRepository.incrementUsageCount(ids);
+        result.stream().map(File::getId).forEach(id -> fileRedisService.queueUsageCount(id, 1));
 
         return result;
     }
@@ -211,18 +213,10 @@ public class FileService {
      *
      * @param urls List of file URLs to delete
      */
+    @Transactional(readOnly = true)
     public void deleteByUrls(List<String> urls) {
-        var files = fileRepository.findByUrlIn(urls);
-        delete(files);
-    }
-
-    /**
-     * Deletes the specified files.
-     *
-     * @param files List of files to delete
-     */
-    public void delete(List<File> files) {
-        deleteByIds(files.stream().map(File::getId).toList());
+        log.debug("Request to delete files with URLs: {}", urls);
+        urls.forEach(url -> fileRedisService.queueUsageCount(url, -1));
     }
 
     /**
@@ -231,9 +225,10 @@ public class FileService {
      *
      * @param fileIds List of file IDs to mark for deletion
      */
+    @Transactional(readOnly = true)
     public void deleteByIds(List<Long> fileIds) {
         log.debug("Request to delete files with IDs: {}", fileIds);
-        fileRepository.decrementUsageCount(fileIds);
+        fileIds.forEach(id -> fileRedisService.queueUsageCount(id, -1));
     }
 
     /**
