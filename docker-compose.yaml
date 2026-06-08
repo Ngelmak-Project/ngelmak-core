@@ -5,9 +5,9 @@ services:
     container_name: ngelmak-core
     ports:
       - "5742:5742"
-    volumes:
-      - ./data/storage:/ngelmak/ngelmak-core/static/uploads/storage
     restart: on-failure:5
+    environment:
+      SPRING_PROFILES_ACTIVE: dev # Set the active profile to 'dev' for development, to 'prod' for production.
     networks:
       - ngelmak-net
 

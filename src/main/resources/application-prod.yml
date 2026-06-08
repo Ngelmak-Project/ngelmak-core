@@ -1,54 +1,30 @@
 spring:
   application:
     name: "Ngelmak Project - Core"
-  config:
-    import: vault:// # Enable Vault as a Config Data source
   cloud:
     vault:
-      uri: http://acemagic:8200
+      uri: http://vault:8200 # vault docker service name and port
       authentication: approle
       fail-fast: true # Enable fail-fast to force confirmation. Spring Boot to crash immediately when Vault/OpenBao is not reachable
       app-role:
-        role-id: ${VAULT_ROLE_ID}
-        secret-id: ${VAULT_SECRET_ID}
+        role-id: ${VAULT_ROLE_ID} # The Vault AppRole Role ID
+        secret-id: ${VAULT_SECRET_ID} # The Vault AppRole Secret ID
       database:
-        enabled: true
+        enabled: true # Disable the database backend if not needed. Set to true if you want to use Vault's database secrets engine for dynamic credentials.
         backend: database
-        role: ngelmak-rw-role
+        role: ngelmak-springboot-role # The Vault role that has permissions to access the database credentials
       kv:
-        enabled: false
+        enabled: true
 
   datasource:
     hikari:
       initialization-fail-timeout: 0
-    url: jdbc:postgresql://acemagic:5432/ngelmakdb
-    # username: v-root-ngelmak--NQiueQV69JiGulzxWmpD-1767183902
-    # password: YPvXyQ8fEf3Wr-nr9cC9
+    url: jdbc:postgresql://postgres:5432/ngelmakdb
 
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: none # Use application-bootstrap.yml for updating the database schema
-
-  liquibase:
-    enabled: false
-
-  jackson:
-    serialization:
-      fail-on-empty-beans: false
-
-  mail:
-    host: smtp.xxx.com
-    username: xxx@xxx.com
-    password: xxxxx
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
-            required: true
-
   servlet:
     multipart:
       enabled: true
@@ -59,47 +35,9 @@ spring:
   resources:
     cache-period: 86400
 
-server:
-  host: localhost
-  port: 5742
-  protocol: http
-
 logging:
   level:
     org.springframework.vault: DEBUG
-    # org.springframework.jdbc.datasource: DEBUG
-    # org:
-    #   hibernate:
-    #     SQL: WARN
-    #   springframework:
-    #     jdbc:
-    #       core:
-    #         JdbcTemplate: DEBUG
-    #         StatementCreatorUtils: TRACE
     org.springframework.boot.autoconfigure: INFO
 
-debug: true
-
-ngelmak:
-  security:
-    authentication:
-      jwt:
-        base64-secret: NzgwODE3NjExMzk1MDFjYzc2NmRjMmM2Yjc0ZTYyMGUxODM3ZThjMzk0ZTliMTE0MjhlNjliOWRhYTI2MzFkN2RkMGU3NDVhYTA0MzRkNTBkNGEzYmZlMzE1MTg4ZjVmYzA5NmFlNTEyZjkyZjYxMGJlMTM1NmU3ZmU0NDg2Yjk=
-        token-validity-in-seconds: 86400
-        token-validity-in-seconds-for-remember-me: 2592000
-
-  clientApp:
-    name: "Ngelmak Project"
-
-  mail:
-    base-url: http://127.0.0.1:8080
-
-  file:
-    upload-directory:
-      location: ./ngelmak-directory/files
-    public:
-      access:
-        location: /resources/public/files
-    private:
-      access:
-        location: /resources/files
+debug: false

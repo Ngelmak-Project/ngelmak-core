@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: jdbc:postgresql://acemagic:5432/ngelmakdb
-    username: ${BOOTSTRAP_DB_USERNAME}
-    password: ${BOOTSTRAP_DB_PASSWORD}
+    # url: jdbc:postgresql://localhost:5432/ngelmakdb
+    username: app_migrator
+    password: migratorpassword
   jpa:
     hibernate:
       ddl-auto: update   # or create / create-drop

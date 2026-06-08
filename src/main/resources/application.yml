@@ -8,37 +8,39 @@ spring:
   config.import: optional:vault:// # Enable Vault as a Config Data source. This requires at least one Vault backend to be enabled and resolvable.
   cloud:
     vault:
-      uri: http://acemagic:8200
+      uri: http://vault:8200
       authentication: approle
       fail-fast: false # Enable fail-fast to force confirmation. Spring Boot to crash immediately when Vault/OpenBao is not reachable
       app-role:
-        role-id: 8a23bd57-a50a-79a3-0ae7-4964e5918ac0
-        secret-id: 0e66597f-7c9e-7ed8-8b68-897d2646c9ae
+        role-id: ${VAULT_ROLE_ID} # The Vault AppRole Role ID
+        secret-id: ${VAULT_SECRET_ID} # The Vault AppRole Secret ID
       database:
-        enabled: false
+        enabled: false # Disable the database backend if not needed. Set to true if you want to use Vault's database secrets engine for dynamic credentials.
         backend: database
-        role: ngelmak-rw-role
+        role: ngelmak-springboot-role
       kv:
+        enabled: false # Disable the KV backend if not needed. Set to true if you want to use Vault's KV secrets engine for application configuration.
         application-name: "" # skip the application name prefix
-        enabled: false
         backend: kv
         default-context: jjwt
         profile-separator: "/" # kv/jjwt/dev or kv/jjwt/prod
 
   datasource:
     # hikari:
-    #   initialization-fail-timeout: 0
-    url: jdbc:postgresql://ngelmak-pgdb:5432/ngelmakdb
-    username: app_migrator
-    password: migratorpass
+    #   initialization-fail-timeout: 0 # Don't fail on startup if the database is unavailable. Useful for development and testing environments.
+    url: jdbc:postgresql://postgres:5432/ngelmakdb
+    # username:
+    # password:
 
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: update # Use application-bootstrap.yml for updating the database schema
+  liquibase:
+    enabled: false
   data:
     redis:
-      host: ngelmak-redis
+      host: redis
       port: 6379
       timeout: 60000ms
       jedis:
@@ -47,8 +49,6 @@ spring:
           max-idle: 8
           min-idle: 0
           max-wait: -1ms
-  liquibase:
-    enabled: false
 
   jackson:
     serialization:
@@ -69,7 +69,7 @@ spring.devtools.livereload.port: 35743
 logging:
   level:
     org.hibernate.SQL: INFO
-    org.hibernate.orm.jdbc.bind: INFO   # For SQL parameters (Hibernate 6+)
+    org.hibernate.orm.jdbc.bind: INFO # For SQL parameters (Hibernate 6+)
     org.springframework.vault: INFO
     org.springframework.jdbc.datasource: INFO
     org.springframework.boot.autoconfigure: INFO

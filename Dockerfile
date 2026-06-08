@@ -16,8 +16,6 @@ WORKDIR /ngelmak
 
 COPY --from=builder ./ngelmak/target/ngelmak-core-0.0.1-SNAPSHOT.jar ./ngelmak-core.jar
 
-RUN mkdir -p /ngelmak/ngelmak-core/static/uploads/storage
-
 EXPOSE 5742
 
 ENTRYPOINT ["java", "-jar", "ngelmak-core.jar"]
