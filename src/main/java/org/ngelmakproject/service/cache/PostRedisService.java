@@ -56,7 +56,7 @@ public class PostRedisService {
                 REDIS_CREATE_KEY,
                 uuid.toString(),
                 value);
-        log.info("📦 Redis | Post saved - {}", value);
+        log.debug("📦 Redis | Post saved - {}", value);
     }
 
     /**
@@ -72,7 +72,7 @@ public class PostRedisService {
         }
         String value = CacheTools.toJson(post);
         redis.opsForHash().put(REDIS_UPDATE_KEY, hashKey, value);
-        log.info("📦 Redis | Post updated - {}", value);
+        log.debug("📦 Redis | Post updated - {}", value);
     }
 
     /**
@@ -94,7 +94,7 @@ public class PostRedisService {
         // Record to redis for updating reply count.
         redis.opsForHash()
                 .put(REDIS_REPLY_COUNT_KEY, postId.toString(), postId.toString());
-        log.info("📦 Redis | Post comment count - {}", postId);
+        log.debug("📦 Redis | Post comment count - {}", postId);
     }
 
     /**
@@ -105,7 +105,7 @@ public class PostRedisService {
     public void setTrending(Trending trending) {
         String value = CacheTools.toJson(trending);
         redis.opsForValue().set(REDIS_TRENDING_KEY, value, Duration.ofMinutes(10));
-        log.info("📦 Redis | Post trending cached for 10 minutes");
+        log.debug("📦 Redis | Post trending cached for 10 minutes");
     }
 
     /**
@@ -185,7 +185,7 @@ public class PostRedisService {
                 return List.of();
             }
         }
-        log.info("📦 Redis | Fetched {} posts from Redis for session '{}'", raw.size(), sessionId);
+        log.debug("📦 Redis | Fetched {} posts from Redis for session '{}'", raw.size(), sessionId);
 
         // Compute final score with session randomness
         List<PostScoreRecord> scored = raw.stream()
@@ -234,14 +234,14 @@ public class PostRedisService {
             Post newPost = CacheTools.fromJson(json, Post.class);
             newPost.setId(null);
             toSave.add(newPost);
-            log.info("Saved {} post(s)", createdKeys.size());
+            log.debug("Saved {} post(s)", createdKeys.size());
         }
         // Process updated posts
         Set<Object> updatedKeys = redis.opsForHash().keys(REDIS_UPDATE_KEY);
         for (Object key : updatedKeys) {
             String json = (String) redis.opsForHash().get(REDIS_UPDATE_KEY, key);
             toSave.add(CacheTools.fromJson(json, Post.class));
-            log.info("Updated {} post(s)", updatedKeys.size());
+            log.debug("Updated {} post(s)", updatedKeys.size());
         }
 
         // Return early if nothing to save
@@ -262,7 +262,7 @@ public class PostRedisService {
         if (!updatedKeys.isEmpty()) {
             redis.opsForHash().delete(REDIS_UPDATE_KEY, updatedKeys.toArray());
         }
-        log.info("Successfully flushed {} pending post(s) to database", toSave.size());
+        log.debug("Successfully flushed {} pending post(s) to database", toSave.size());
     }
 
     /**
@@ -289,7 +289,7 @@ public class PostRedisService {
             redis.opsForZSet().remove(REDIS_FEED_KEY, processedKeys.toArray());
             redis.opsForSet().remove(REDIS_DIRTY_POSTS_KEY, processedKeys.toArray());
         }
-        log.info("Removed {} processed operations from Redis", processedKeys.size());
+        log.debug("Removed {} processed operations from Redis", processedKeys.size());
     }
 
     /**
@@ -310,7 +310,7 @@ public class PostRedisService {
             return;
         }
 
-        log.info("Flushing {} pending comment count operations", processedKeys.size());
+        log.debug("Flushing {} pending comment count operations", processedKeys.size());
 
         // Aggregate and apply updates in one operation
         Set<Long> postIds = processedKeys.stream()
@@ -357,7 +357,7 @@ public class PostRedisService {
             log.debug("No dirty posts to recompute");
             return;
         }
-        log.info("Recomputing scores for {} dirty post(s)", dirtyIds.size());
+        log.debug("Recomputing scores for {} dirty post(s)", dirtyIds.size());
 
         // Recompute only dirty posts
         if (dirtyIds != null && !dirtyIds.isEmpty()) {

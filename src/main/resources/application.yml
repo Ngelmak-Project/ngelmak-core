@@ -3,27 +3,26 @@ spring:
     name: "Ngelmak Project - Core"
 
   profiles:
-    active: dev # or prod
+    active: prod # or prod
 
   config.import: optional:vault:// # Enable Vault as a Config Data source. This requires at least one Vault backend to be enabled and resolvable.
   cloud:
     vault:
       uri: http://vault:8200
       authentication: approle
-      fail-fast: false # Enable fail-fast to force confirmation. Spring Boot to crash immediately when Vault/OpenBao is not reachable
+      fail-fast: true # Enable fail-fast to force confirmation. Spring Boot to crash immediately when Vault/OpenBao is not reachable
       app-role:
         role-id: ${VAULT_ROLE_ID} # The Vault AppRole Role ID
         secret-id: ${VAULT_SECRET_ID} # The Vault AppRole Secret ID
       database:
-        enabled: false # Disable the database backend if not needed. Set to true if you want to use Vault's database secrets engine for dynamic credentials.
+        enabled: true # Disable the database backend if not needed. Set to true if you want to use Vault's database secrets engine for dynamic credentials.
         backend: database
         role: ngelmak-springboot-role
       kv:
-        enabled: false # Disable the KV backend if not needed. Set to true if you want to use Vault's KV secrets engine for application configuration.
+        enabled: true
         application-name: "" # skip the application name prefix
-        backend: kv
-        default-context: jjwt
-        profile-separator: "/" # kv/jjwt/dev or kv/jjwt/prod
+        backend: secret # The Vault KV backend path (e.g. "secret" for KV v2 or "kv" for KV v1)
+        default-context: jjwt/prod
 
   datasource:
     # hikari:

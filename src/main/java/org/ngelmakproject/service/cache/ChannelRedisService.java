@@ -36,7 +36,7 @@ public class ChannelRedisService {
         String json = redis.opsForValue().get(key);
         if (json != null) {
             var cached = CacheTools.fromJson(json, Channel.class);
-            log.info("📦 Redis | Cache hit for user's Channel : {}", cached);
+            log.debug("📦 Redis | Cache hit for user's Channel : {}", cached);
             return Optional.of(cached);
         }
 
@@ -45,7 +45,7 @@ public class ChannelRedisService {
 
         // Cache if found
         channel.ifPresent(ch -> redis.opsForValue().set(key, CacheTools.toJson(ch), Duration.ofMinutes(10)));
-        log.info("📦 Redis | Cached channel for user {} (10 min)", userId);
+        log.debug("📦 Redis | Cached channel for user {} (10 min)", userId);
 
         return channel;
     }
@@ -60,6 +60,6 @@ public class ChannelRedisService {
         String key = REDIS_CURRENT_USER_KEY + ":" + channel.getUser();
         redis.opsForValue().set(key, CacheTools.toJson(channel), Duration.ofMinutes(10));
 
-        log.info("📦 Redis | Updated cached channel for user {} (10 min)", channel.getUser());
+        log.debug("📦 Redis | Updated cached channel for user {} (10 min)", channel.getUser());
     }
 }

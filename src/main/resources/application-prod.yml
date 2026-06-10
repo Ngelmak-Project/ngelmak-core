@@ -1,6 +1,7 @@
 spring:
   application:
     name: "Ngelmak Project - Core"
+
   cloud:
     vault:
       uri: http://vault:8200 # vault docker service name and port

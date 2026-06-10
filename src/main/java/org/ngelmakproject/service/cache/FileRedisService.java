@@ -51,7 +51,7 @@ public class FileRedisService {
         String json = CacheTools.toJson(usageUpdate);
         redis.opsForHash()
                 .put(REDIS_USAGE_COUNT_KEY, id.toString(), json);
-        log.info("📦 Redis | File usage count updated for ID: {}, Count: {}", id, count);
+        log.debug("📦 Redis | File usage count updated for ID: {}, Count: {}", id, count);
     }
 
     /**
@@ -67,7 +67,7 @@ public class FileRedisService {
         String json = CacheTools.toJson(usageUpdate);
         redis.opsForHash()
                 .put(REDIS_USAGE_COUNT_URL_KEY, url, json);
-        log.info("📦 Redis | File usage count updated for URL: {}, Count: {}", url, count);
+        log.debug("📦 Redis | File usage count updated for URL: {}, Count: {}", url, count);
     }
 
     /**
@@ -94,7 +94,7 @@ public class FileRedisService {
             return;
         }
 
-        log.info("Flushing {} file ID and {} URL usage count operations",
+        log.debug("Flushing {} file ID and {} URL usage count operations",
                 idKeys.size(), urlKeys.size());
 
         // Combine both sources and aggregate

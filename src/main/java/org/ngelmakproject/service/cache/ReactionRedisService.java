@@ -48,7 +48,7 @@ public class ReactionRedisService {
                 REDIS_CREATE_KEY,
                 uuid.toString(),
                 value);
-        log.info("📦 Redis | Reaction saved - {}", value);
+        log.debug("📦 Redis | Reaction saved - {}", value);
     }
 
     /**
@@ -65,7 +65,7 @@ public class ReactionRedisService {
         }
         String value = CacheTools.toJson(reaction);
         redis.opsForHash().put(REDIS_UPDATE_KEY, hashKey, value);
-        log.info("📦 Redis | Reaction updated - {}", value);
+        log.debug("📦 Redis | Reaction updated - {}", value);
     }
 
     /**
@@ -96,13 +96,13 @@ public class ReactionRedisService {
             Reaction newReaction = CacheTools.fromJson(json, Reaction.class);
             newReaction.setId(null);
             toSave.add(newReaction);
-            log.info("Saved {} reaction(s)", createdKeys.size());
+            log.debug("Saved {} reaction(s)", createdKeys.size());
         }
         Set<Object> updatedKeys = redis.opsForHash().keys(REDIS_UPDATE_KEY);
         for (Object key : updatedKeys) {
             String json = (String) redis.opsForHash().get(REDIS_UPDATE_KEY, key);
             toSave.add(CacheTools.fromJson(json, Reaction.class));
-            log.info("Updated {} reaction(s)", updatedKeys.size());
+            log.debug("Updated {} reaction(s)", updatedKeys.size());
         }
         if (toSave.isEmpty()) {
             return;
@@ -133,7 +133,7 @@ public class ReactionRedisService {
         if (!updatedKeys.isEmpty()) {
             redis.opsForHash().delete(REDIS_UPDATE_KEY, updatedKeys.toArray());
         }
-        log.info("Flushing {} pending reaction operations", toSave.size());
+        log.debug("Flushing {} pending reaction operations", toSave.size());
     }
 
     /**
@@ -161,6 +161,6 @@ public class ReactionRedisService {
         if (!processedKeys.isEmpty()) {
             redis.opsForHash().delete(REDIS_DELETE_KEY, processedKeys.toArray());
         }
-        log.info("Removed {} processed operations from Redis", processedKeys.size());
+        log.debug("Removed {} processed operations from Redis", processedKeys.size());
     }
 }

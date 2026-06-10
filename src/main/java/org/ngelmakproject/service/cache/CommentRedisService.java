@@ -52,7 +52,7 @@ public class CommentRedisService {
                 REDIS_CREATE_KEY,
                 uuid.toString(),
                 value);
-        log.info("📦 Redis | Comment saved - {}", value);
+        log.debug("📦 Redis | Comment saved - {}", value);
     }
 
     /**
@@ -69,7 +69,7 @@ public class CommentRedisService {
         }
         String value = CacheTools.toJson(comment);
         redis.opsForHash().put(REDIS_UPDATE_KEY, hashKey, value);
-        log.info("📦 Redis | Comment updated - {}", value);
+        log.debug("📦 Redis | Comment updated - {}", value);
     }
 
     /**
@@ -92,7 +92,7 @@ public class CommentRedisService {
         // Record to redis for updating reply count.
         redis.opsForHash()
                 .put(REDIS_REPLY_COUNT_KEY, commentId.toString(), commentId.toString());
-        log.info("📦 Redis | Comment comment count - {}", commentId);
+        log.debug("📦 Redis | Comment comment count - {}", commentId);
     }
 
     /**
@@ -117,13 +117,13 @@ public class CommentRedisService {
             } else if (newComment.getPost() != null) {
                 postRedisService.queueCommmentCount(newComment.getPost().getId());
             }
-            log.info("Saved {} comment(s)", createdKeys.size());
+            log.debug("Saved {} comment(s)", createdKeys.size());
         }
         Set<Object> updatedKeys = redis.opsForHash().keys(REDIS_UPDATE_KEY);
         for (Object key : updatedKeys) {
             String json = (String) redis.opsForHash().get(REDIS_UPDATE_KEY, key);
             toSave.add(CacheTools.fromJson(json, Comment.class));
-            log.info("Updated {} comment(s)", updatedKeys.size());
+            log.debug("Updated {} comment(s)", updatedKeys.size());
         }
         if (toSave.isEmpty()) {
             return;
@@ -138,7 +138,7 @@ public class CommentRedisService {
         if (!updatedKeys.isEmpty()) {
             redis.opsForHash().delete(REDIS_UPDATE_KEY, updatedKeys.toArray());
         }
-        log.info("Flushing {} pending comment operations", toSave.size());
+        log.debug("Flushing {} pending comment operations", toSave.size());
     }
 
     /**
@@ -174,7 +174,7 @@ public class CommentRedisService {
         if (!processedKeys.isEmpty()) {
             redis.opsForHash().delete(REDIS_DELETE_KEY, processedKeys.toArray());
         }
-        log.info("Removed {} processed operations from Redis", processedKeys.size());
+        log.debug("Removed {} processed operations from Redis", processedKeys.size());
     }
 
     /**
@@ -195,7 +195,7 @@ public class CommentRedisService {
             return;
         }
 
-        log.info("Flushing {} pending reply count operations", processedKeys.size());
+        log.debug("Flushing {} pending reply count operations", processedKeys.size());
 
         // Aggregate and apply updates in one operation
         Set<Long> commentIds = processedKeys.stream()

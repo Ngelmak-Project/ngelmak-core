@@ -1,6 +1,42 @@
 # 📱 Ngelmak Thruline Core
 
-**Ngelmak Thruline Core** is the news/information exchange service for the Ngelmak ecosystem. It manages posts, comments, likes, and user interactions, integrated with other microservices through the API Gateway.
+**Ngelmak Thruline Core** is the news and information exchange service for the Ngelmak ecosystem. It manages posts, comments, likes, and user interactions, seamlessly integrated with other microservices through the API Gateway.
+
+---
+
+## 📋 Table of Contents
+
+- [Quick Start](#quick-start)
+- [Project Structure](#project-structure)
+- [Core Components](#core-components)
+- [Prerequisites](#prerequisites)
+- [Installation & Setup](#installation--setup)
+- [Configuration](#configuration)
+- [Database Management](#database-management)
+- [Performance Tuning](#performance-tuning)
+- [Running the Application](#running-the-application)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
+
+## 🚀 Quick Start
+
+Get up and running in minutes:
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/Ngelmak-Thruline-Core.git
+cd Ngelmak-Thruline-Core
+
+# Build the project
+mvn clean install
+
+# Run locally (development profile)
+mvn spring-boot:run
+```
+
+The application will start on `http://localhost:8080`.
 
 ---
 
@@ -8,73 +44,113 @@
 
 ```
 Ngelmak-Thruline-Core/
-├── src/main/java/.../thruline/
-│   ├── web/           # 🔌 REST endpoints
-│   ├── service/       # 🧠 Business logic
-│   ├── security/      # 🔐 Security & auth
-│   ├── domain/        # 📦 Entity models
-│   ├── repository/    # 🗂️ JPA repositories
-│   └── config/        # ⚙️ Vault, DB, messaging
+├── src/main/java/.../
+│   ├── web/                  # REST API endpoints
+│   ├── service/              # Business logic & domain services
+│   ├── security/             # Authentication & authorization
+│   ├── domain/               # JPA entity models
+│   ├── repository/           # Data access layer (JPA)
+│   └── config/               # Spring configuration (Vault, DB, messaging)
 ├── src/main/resources/
-│   ├── application.yml
-│   ├── application-prod.yml
-│   └── application-bootstrap.yml
-├── Dockerfile
-└── pom.xml
+│   ├── application.yml       # Default configuration
+│   ├── application-prod.yml  # Production configuration
+│   └── application-bootstrap.yml  # Initial schema setup
+├── Dockerfile                # Container image definition
+├── pom.xml                   # Maven build configuration
+├── README.md                 # This file
+└── .gitignore               # Git ignore rules
 ```
 
 ---
 
 ## 🏗️ Core Components
 
-| Component | Purpose |
-|-----------|---------|
-| **PostgreSQL** | 🗄️ Persistent relational data storage |
-| **Redis** | ⚡ Caching & session management |
-| **SeaweedFS** | 📂 Distributed file/object storage |
-| **HashiCorp Vault** | 🔑 Secret management (optional) |
-| **Spring Boot** | 🚀 Application framework (Java 21+) |
+| Component | Version | Purpose |
+|-----------|---------|---------|
+| **Java** | 21+ | Runtime environment |
+| **Spring Boot** | Latest | Application framework |
+| **PostgreSQL** | 13+ | Relational data storage |
+| **Redis** | 6+ | Caching & session management |
+| **SeaweedFS** | Latest | Distributed file/object storage |
+| **HashiCorp Vault** | 1.12+ | Secret management (optional) |
 
 ---
 
 ## ✅ Prerequisites
 
-- **Java 21+** and **Maven 3.8+**
-- **PostgreSQL** running on `postgres:5432` (or `localhost:5432`)
-- **Redis** running on `redis:6379` (or `localhost:6379`)
-- **Vault** running on `vault:8200` (optional; `localhost:8200` for local dev)
+### Required
+- **Java 21+** — [Download](https://openjdk.java.net/)
+- **Maven 3.8+** — [Download](https://maven.apache.org/)
+- **PostgreSQL 13+** — Running on `localhost:5432` (or configure `postgres:5432` for Docker)
+- **Redis 6+** — Running on `localhost:6379` (or configure `redis:6379` for Docker)
+
+### Optional
+- **Docker & Docker Compose** — For containerized deployment
+- **HashiCorp Vault 1.12+** — For production secret management
 
 ---
 
-## 🗄️ Database Setup
+## 📥 Installation & Setup
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/yourusername/Ngelmak-Thruline-Core.git
+cd Ngelmak-Thruline-Core
+```
+
+### 2. Database Setup
 
 Create the application database and migration user:
 
 ```sql
+-- Connect to PostgreSQL as superuser
+psql -U postgres
+
 -- Create the application database
 CREATE DATABASE ngelmakdb OWNER postgres;
 
--- Create the migration user with schema update privileges
-CREATE ROLE app_migrator WITH LOGIN PASSWORD 'your_password_here';
+-- Create the migration user with schema privileges
+CREATE ROLE app_migrator WITH LOGIN PASSWORD 'your_unreadable_impossible_remember_password_here';
+
+-- Grant database privileges
 GRANT ALL PRIVILEGES ON DATABASE ngelmakdb TO app_migrator;
 
--- Grant schema privileges
+-- Switch to the new database and grant schema privileges
 \c ngelmakdb
 GRANT USAGE, CREATE ON SCHEMA public TO app_migrator;
 ```
 
+### 3. Run Database Migrations
+
+**First time setup only:**
+
+```bash
+mvn spring-boot:run -Dspring-boot.run.profiles=bootstrap
+```
+
+This uses the `application-bootstrap.yml` profile to create and populate the initial schema.
+
+Alternatively:
+
+```bash
+java -jar target/ngelmak-core.jar --spring.profiles.active=bootstrap
+```
+
 ---
 
-## ⚙️ Configuration Files
+## ⚙️ Configuration
 
-### `application.yml` (Default / Runtime)
+The application uses a **profile-based configuration system** for managing environments.
 
-This is the file Spring Boot loads automatically for normal operation.
+### Default Configuration (`application.yml`)
+
+Used for development and local testing:
 
 ```yaml
 spring:
   application:
-    name: "Ngelmak Project - Core"
+    name: "Ngelmak Thruline Core"
   
   profiles:
     active: dev  # Switch to 'prod' for production
@@ -98,30 +174,25 @@ spring:
   #       role: ngelmak-springboot-role
   #     kv:
   #       enabled: true
-  #       backend: kv
-  #       default-context: jjwt
-  #       profile-separator: "/"
+  #       backend: secret
+  #       default-context: jjwt/prod
+  #       application-name: ""   # No prefix
+  #       profile-separator: ""  # Avoids "-dev" or "-prod" suffixes
   
   # ============================================
   # Database Configuration
   # ============================================
   datasource:
     hikari:
-      # Don't fail startup if DB is temporarily unavailable
-      # Useful for dev/test environments
       initialization-fail-timeout: 0
-    # PostgreSQL connection URL
-    # Use 'postgres' as service name in Docker Compose
     url: jdbc:postgresql://postgres:5432/ngelmakdb
-   #  username: 
-   #  password:
+    # username:        # Set via environment variable
+    # password:        # Set via environment variable
   
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      # 'update' = auto-migrate schema; use application-bootstrap.yml for initial setup
       ddl-auto: update
-    # Disable SQL logging in production for performance
     show-sql: false
   
   # ============================================
@@ -129,10 +200,8 @@ spring:
   # ============================================
   data:
     redis:
-      # Redis service name (Docker) or localhost (local dev)
       host: redis
       port: 6379
-      # Connection timeout in milliseconds
       timeout: 60000ms
 
 # ============================================
@@ -140,8 +209,6 @@ spring:
 # ============================================
 seaweedfs:
   filer:
-    # Internal URL for backend → SeaweedFS communication
-    # Use service name 'filer' in Docker Compose
     url: http://filer:9555
 
 # ============================================
@@ -149,54 +216,23 @@ seaweedfs:
 # ============================================
 file:
   public:
-    # Public URL for client-side file downloads
-    # Typically routed through CDN or reverse proxy
     base-url: https://storage.ngelmak.org
 ```
 
-### `application-bootstrap.yml` (🔨 Schema Creation)
+---
 
-**Use this profile only once** for initial database schema creation and migration. Run with the `app_migrator` user who has ALTER privileges.
+### Production Configuration (`application-prod.yml`)
 
-```yaml
-spring:
-  datasource:
-    # Local PostgreSQL connection for schema migration
-    url: jdbc:postgresql://localhost:5432/ngelmakdb
-    # User with ALTER/CREATE privileges on schema
-    username: app_migrator
-    password: your_password_here
-  
-  jpa:
-    hibernate:
-      # 'update' = create/modify tables
-      # 'create' = drop and recreate (development only!)
-      # 'create-drop' = reset on every restart (testing only!)
-      ddl-auto: update
-    # Show generated SQL for debugging
-    show-sql: true
-```
-
-**Run with:**
-```bash
-# Maven
-mvn spring-boot:run -Dspring-boot.run.profiles=bootstrap
-
-# JAR
-java -jar app.jar --spring.profiles.active=bootstrap
-```
-
-### `application-prod.yml` (Production)
-
-Use environment variables and Vault for all secrets in production. Never commit credentials.
+Used in production with Vault integration and environment variables:
 
 ```yaml
 spring:
   profiles:
     active: prod
   
-  # Retrieve all secrets from Vault
-  config.import: vault://
+  config:
+    import: vault://
+  
   cloud:
     vault:
       uri: ${VAULT_URI}
@@ -205,6 +241,15 @@ spring:
       app-role:
         role-id: ${VAULT_ROLE_ID}
         secret-id: ${VAULT_SECRET_ID}
+      database:
+        enabled: true
+        backend: database
+        role: ngelmak-springboot-role
+      kv:
+        enabled: true
+        backend: secret
+        application-name: ""
+        default-context: jjwt/prod
   
   datasource:
     url: ${DB_URL}
@@ -224,128 +269,151 @@ spring:
 
 ---
 
+### Bootstrap Configuration (`application-bootstrap.yml`)
+
+**Use this profile only once** for initial schema creation:
+
+```yaml
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ngelmakdb
+    username: app_migrator
+    password: your_secure_password_here
+  
+  jpa:
+    hibernate:
+      ddl-auto: update  # Create/update schema
+    show-sql: true
+```
+
+---
+
 ## 🔑 Vault Configuration (Optional)
+
+For production deployments, use **HashiCorp Vault** to securely manage secrets.
 
 ### Prerequisites
 
 - Vault server running and unsealed
-- Initial root token or authenticated session
-- [Vault CLI installed](https://www.vaultproject.io/downloads)
-- AppRole auth method enabled on Vault
-- Database backend configured for dynamic credentials
-- KV secrets engine configured
+- AppRole authentication enabled
+- KV v2 secrets engine mounted at `secret/`
+- Database secrets engine configured
+- Transit engine enabled (optional)
 
----
+### Setting Up JWT Secret
 
-### Configuration Parameters
+Store the JWT secret in Vault under `secret/jjwt/prod`:
 
-#### `uri`
-**What it is:** The network address where Vault is accessible.  
-**Value:** `http://vault:8200` (Docker) or `http://localhost:8200` (local dev)
-
-#### `authentication: approle`
-**What it is:** Authentication method. AppRole is ideal for automated/application authentication without human tokens.  
-**Prerequisite:** AppRole auth method must be [enabled on Vault](https://www.vaultproject.io/docs/auth/approle).
-
-#### `fail-fast: true`
-**What it is:** If `true`, Spring Boot crashes immediately if Vault is unreachable at startup. If `false`, app starts anyway (useful for development fallback).  
-**Recommended:** `true` in production, `false` in development.
-
-#### `app-role`
-**What it is:** AppRole credentials for authenticating the application to Vault.
-
-- **`role-id`**: Fixed identifier for the AppRole (retrieve with `vault read auth/approle/role/springboot/role-id`)
-- **`secret-id`**: Temporary secret issued per deployment (retrieve with `vault write -f auth/approle/role/springboot/secret-id`)
-
-**Set as environment variables:**
 ```bash
-export VAULT_ROLE_ID="your_role_id_here"
-export VAULT_SECRET_ID="your_secret_id_here"
+vault kv put secret/jjwt/prod jwt-secret-key="your-secure-jwt-secret-here"
 ```
 
-#### `database`
-**What it is:** Vault's dynamic database credentials backend. Generates temporary PostgreSQL usernames/passwords automatically.
+Verify it was stored:
 
-- **`enabled: true`**: Enable dynamic credential generation
-- **`backend: database`**: Use Vault's database secrets engine
-- **`role: ngelmak-springboot-role`**: Vault role name that defines which database and permissions the app gets
-
-**Prerequisite:** Database backend must be configured in Vault with a role named `ngelmak-springboot-role` that points to your PostgreSQL instance.
-
-**How to retrieve credentials at runtime:**  
-Spring Cloud Vault automatically reads from `database/creds/ngelmak-springboot-role` and injects them into `spring.datasource.username` and `spring.datasource.password`.
-
-#### `kv`
-**What it is:** Vault's Key-Value secrets engine for storing static configuration (API keys, JWT secrets, etc.).
-
-- **`enabled: true`**: Enable KV secret retrieval
-- **`backend: kv`**: Use KV v2 secrets engine (or `kv-v1` for legacy)
-- **`default-context: jjwt`**: Path prefix in Vault (e.g., `secret/jjwt/`)
-- **`profile-separator: "/"`**: Separates profile-specific secrets (e.g., `secret/jjwt/dev` or `secret/jjwt/prod`)
-
-**Prerequisite:** KV secrets engine must be mounted at `secret/` path with secrets stored like:
 ```bash
-vault kv put secret/jjwt/dev jwt-secret=my_dev_secret
-vault kv put secret/jjwt/prod jwt-secret=my_prod_secret
+vault kv get secret/jjwt/prod
+
+========= Data =========
+Key               Value
+---               -----
+jwt-secret-key    your-secure-jwt-secret-here
 ```
 
-Spring Cloud Vault automatically injects these into `@Value` fields or `@ConfigurationProperties`.
+The application will automatically load this into:
 
----
+```java
+@Value("${jwt-secret-key}")
+private String jwtSecretKey;
+```
 
-### How to Get Credentials
+### Vault Policy
+
+Create a policy file (`springboot-policy.hcl`) to restrict Spring Boot's access:
+
+```hcl
+# Allow reading database dynamic credentials
+path "database/creds/ngelmak-springboot-role" {
+  capabilities = ["read"]
+}
+
+# Allow reading JWT secrets under secret/jjwt/*
+path "secret/jjwt/*" {
+  capabilities = ["read"]
+}
+```
+
+Apply the policy:
 
 ```bash
-# 1. Get the AppRole Role ID (stable)
+vault policy write springboot ./springboot-policy.hcl
+```
+
+### AppRole Setup
+
+Generate AppRole credentials for Spring Boot authentication:
+
+```bash
+# View the role-id
 vault read auth/approle/role/springboot/role-id
 
-# 2. Generate a Secret ID (temporary, usually 72h TTL)
+# Generate a new secret-id
 vault write -f auth/approle/role/springboot/secret-id
 
-# 3. Export as environment variables
-export VAULT_ROLE_ID="c481309c-8927-83b8-92a3-771d312e4905"
-export VAULT_SECRET_ID="c78ee677-3b49-e5a8-9b91-810c1d768fa9"
+# Export as environment variables
+export VAULT_ROLE_ID="..."
+export VAULT_SECRET_ID="..."
+export VAULT_URI="https://vault.ngelmak.org"
 ```
-
-For complete Vault setup, policy configuration, and role creation, see [Ngelmak-Vault](https://github.com/Ngelmak-Project/ngelmak-vault).
 
 ---
 
-## 🚀 Run Locally
+## 🗄️ Database Management
+
+### Initial Setup
+
+Create the database and user (run once):
 
 ```bash
-mvn spring-boot:run
+mvn spring-boot:run -Dspring-boot.run.profiles=bootstrap
 ```
 
-The service starts on the default Spring Boot port (typically `8080`).
+### Running Migrations
+
+For subsequent deployments, migrations run automatically on startup. To disable auto-migration (recommended for production), set in `application-prod.yml`:
+
+```yaml
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate  # Only validate, never modify schema
+```
 
 ---
 
-## 📊 Database Performance Tuning
+## 📊 Performance Tuning
 
 ### Feed Query Indexes
 
-**Why:** Efficient timestamp-based filtering prevents full table scans on large datasets.
+Optimize timestamp-based feed queries to prevent full table scans on large datasets:
 
 ```sql
 -- Primary index for feed queries (most important)
 CREATE INDEX idx_post_at ON post (at DESC);
 
--- Optional: Include engagement metrics for scoring
-CREATE INDEX idx_post_at_comment ON post (at DESC, comment_count DESC);
+-- Optional: Include engagement metrics for combined filtering
+CREATE INDEX idx_post_at_comments ON post (at DESC, comment_count DESC);
 
 -- Optional: Index only recent posts to reduce index size
 CREATE INDEX idx_post_recent ON post (at DESC) 
 WHERE at >= NOW() - INTERVAL '30 days';
 ```
 
-### Full-Text Search Setup
+### Full-Text Search
 
-**Why:** Enables fast, relevance-ranked search across post content without scanning entire tables.
-
-Add a generated `tsvector` column for French language search:
+Enable fast, relevance-ranked search across post content using PostgreSQL's built-in full-text search:
 
 ```sql
+-- Add a generated tsvector column for French language search
 ALTER TABLE post
 ADD COLUMN textsearchable_index_col tsvector
 GENERATED ALWAYS AS (
@@ -353,15 +421,16 @@ GENERATED ALWAYS AS (
     setweight(to_tsvector('french', coalesce(keywords, '')), 'D')
 ) STORED;
 
--- GIN index for fast full-text queries
-CREATE INDEX post_textsearch_idx ON post USING GIN (textsearchable_index_col);
+-- Create GIN index for fast full-text queries
+CREATE INDEX idx_post_textsearch ON post USING GIN (textsearchable_index_col);
 ```
 
-**Query example:**
+**Example query:**
+
 ```sql
 SELECT id, content, ts_rank_cd(textsearchable_index_col, query) AS rank
 FROM post,
-     websearch_to_tsquery('french', 'hello') AS query
+     websearch_to_tsquery('french', 'your-search-term') AS query
 WHERE status = 'VALIDATED'
   AND textsearchable_index_col @@ query
 ORDER BY rank DESC
@@ -370,6 +439,123 @@ LIMIT 10;
 
 ---
 
-## 📜 License
+## 🚀 Running the Application
 
-MIT License
+### Local Development
+
+```bash
+# Development mode (auto-reload)
+mvn spring-boot:run
+```
+
+The application starts at `http://localhost:8080`.
+
+### Docker Compose
+
+Run the entire stack locally:
+
+```yaml
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: ngelmakdb
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+    depends_on:
+      - postgres
+      - redis
+
+volumes:
+  postgres_data:
+  redis_data:
+```
+
+Start services:
+
+```bash
+docker-compose up -d
+```
+
+### Production Deployment
+
+```bash
+# Build the JAR
+mvn clean package
+
+# Run with production profile
+java -jar target/ngelmak-core.jar \
+  --spring.profiles.active=prod \
+  --server.port=8080
+```
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please follow these guidelines:
+
+1. **Fork** the repository
+2. **Create a feature branch** (`git checkout -b feature/amazing-feature`)
+3. **Commit your changes** (`git commit -m 'Add amazing feature'`)
+4. **Push to the branch** (`git push origin feature/amazing-feature`)
+5. **Open a Pull Request**
+
+### Code Style
+
+- Follow [Google Java Style Guide](https://google.github.io/styleguide/javaguide.html)
+- Use meaningful commit messages
+- Write tests for new features
+
+---
+
+## 📄 License
+
+This project is licensed under the **GNU General Public License v3.0** — see the [LICENSE](LICENSE) file for details.
+
+You are free to:
+- **Use** this software for any purpose
+- **Copy** and distribute it
+- **Modify** and distribute modified versions
+
+Under the condition that you:
+- **Disclose** the source code
+- **License** derivative works under GPLv3
+- **Include** a copy of this license
+
+For the full license text, visit [gnu.org/licenses/gpl-3.0.html](https://www.gnu.org/licenses/gpl-3.0.html)
+---
+
+## 📞 Support
+
+For issues, questions, or suggestions:
+
+- **GitHub Issues**: [Report a bug](https://github.com/yourusername/Ngelmak-Thruline-Core/issues)
+- **Discussions**: [Join the conversation](https://github.com/yourusername/Ngelmak-Thruline-Core/discussions)
+
+---
+
+## 🔗 Related Projects
+
+- [Ngelmak API Gateway](https://github.com/yourusername/Ngelmak-API-Gateway)
+- [Ngelmak User Service](https://github.com/yourusername/Ngelmak-User-Service)
+- [Ngelmak Infrastructure](https://github.com/yourusername/Ngelmak-Infrastructure)

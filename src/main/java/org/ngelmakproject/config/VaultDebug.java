@@ -37,12 +37,9 @@ public class VaultDebug {
 
     String kvBackend = env.getProperty("spring.cloud.vault.kv.backend", "kv");
     String kvContext = env.getProperty("spring.cloud.vault.kv.default-context", "");
-    String kvSeparator = env.getProperty("spring.cloud.vault.kv.profile-separator", "/");
     String kvAppName = env.getProperty("spring.cloud.vault.kv.application-name", "");
 
     String kvPath = kvBackend + "/" + kvContext;
-    if (!profile.isEmpty())
-      kvPath += kvSeparator + profile;
 
     log.info("\n\n" +
         "====================  🔐 VAULT DEBUG INFO  ====================\n" +
@@ -51,7 +48,6 @@ public class VaultDebug {
         " KV Enabled            :  {}\n" +
         " KV Backend            :  {}\n" +
         " KV Default Context    :  {}\n" +
-        " KV Profile Separator  :  '{}'\n" +
         " KV Application Name   :  '{}'\n" +
         " KV Resolved Path      :  {}\n" +
         "---------------------------------------------------------------\n" +
@@ -67,7 +63,6 @@ public class VaultDebug {
         kvEnabled,
         kvBackend,
         kvContext,
-        kvSeparator,
         kvAppName,
         kvPath,
         dbEnabled,
