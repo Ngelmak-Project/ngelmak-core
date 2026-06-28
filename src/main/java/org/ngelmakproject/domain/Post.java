@@ -11,6 +11,7 @@ import com.fasterxml.jackson.annotation.JsonIncludeProperties;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -56,18 +57,23 @@ public class Post implements Serializable {
     @Column(name = "visible")
     private Boolean visible = true;
 
+    /** The content of the post. */
     @Column(name = "content", columnDefinition = "TEXT", nullable = false)
     @Size(max = 10000)
     private String content;
-    /** The content of the post. */
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @Column(name = "comment_count")
+    private Integer commentCount = 0;
+
     @JsonIncludeProperties(value = { "id", "content", "at", "channel" })
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "post_reply_id", nullable = true, foreignKey = @ForeignKey(name = "fk_post_postreply", foreignKeyDefinition = "FOREIGN KEY (reply_id) REFERENCES post(id) ON DELETE SET NULL"))
     private Post postReply;
 
     @ManyToOne(fetch = FetchType.EAGER, optional = false)
     @NotNull
     @JsonIncludeProperties(value = { "id", "identifier", "name", "avatar" })
+    @JoinColumn(name = "post_channel_id", nullable = true, foreignKey = @ForeignKey(name = "fk_post_postchannel", foreignKeyDefinition = "FOREIGN KEY (channel_id) REFERENCES post(id) ON DELETE CASCADE"))
     private Channel channel;
 
     @ManyToMany
@@ -76,8 +82,6 @@ public class Post implements Serializable {
                     @JoinColumn(name = "file_id", referencedColumnName = "id") })
     private Set<File> files = new HashSet<>();
 
-    @Column(name = "comment_count")
-    private Integer commentCount = 0;
 
     /**
      * The Subject enumeration.

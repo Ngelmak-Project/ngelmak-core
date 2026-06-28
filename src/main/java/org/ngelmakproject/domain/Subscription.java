@@ -5,6 +5,8 @@ import java.time.LocalDate;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -33,12 +35,12 @@ public class Subscription implements Serializable {
     @Column(name = "notifications_enabled", nullable = false)
     private boolean notificationsEnabled = true;
 
-    @ManyToOne(optional = false)
-    @JoinColumn(nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "subscriber_id", nullable = false, foreignKey = @ForeignKey(name = "fk_subscription_subscriber", foreignKeyDefinition = "FOREIGN KEY (subscriber_id) REFERENCES channel(id) ON DELETE CASCADE"))
     private Channel subscriber;
 
-    @ManyToOne(optional = false)
-    @JoinColumn(nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "subscribed_to_id", nullable = false, foreignKey = @ForeignKey(name = "fk_subscription_subscribed_to", foreignKeyDefinition = "FOREIGN KEY (subscribed_to_id) REFERENCES channel(id) ON DELETE CASCADE"))
     private Channel subscribedTo;
 
     public Long getId() {

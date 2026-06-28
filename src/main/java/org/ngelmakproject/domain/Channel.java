@@ -143,6 +143,17 @@ public class Channel implements Serializable {
     }
 
     @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof Channel)) {
+            return false;
+        }
+        return getId() != null && getId().equals(((Channel) o).getId());
+    }
+
+    @Override
     public String toString() {
         return "Channel [id=" + id + ", user=" + user + ", identifier=" + identifier + ", name=" + name
                 + ", description=" + description + ", avatar=" + avatar + ", banner=" + banner + ", createdAt="

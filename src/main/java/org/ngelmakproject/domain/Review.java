@@ -8,6 +8,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -57,17 +58,6 @@ public class Review implements Serializable {
     @Column(name = "due_at")
     private Instant dueAt;
 
-    // The ticket being reviewed
-    @NotNull
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "ticket_id", nullable = false)
-    private Ticket ticket;
-
-    // Threading: replies to previous reviews
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "reply_to_id")
-    private Review replyTo;
-
     // Who wrote this review entry (moderator or user)
     @Column(name = "author_id")
     private Long author;
@@ -76,6 +66,31 @@ public class Review implements Serializable {
     @Enumerated(EnumType.STRING)
     @Column(name = "visibility", nullable = false, length = 20)
     private Visibility visibility = Visibility.PUBLIC;
+
+    // The ticket being reviewed
+    @NotNull
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(
+        name = "ticket_id",
+        nullable = false,
+        foreignKey = @ForeignKey(
+            name = "fk_review_ticket",
+            foreignKeyDefinition = "FOREIGN KEY (ticket_id) REFERENCES ticket(id) ON DELETE CASCADE"
+        )
+    )
+    private Ticket ticket;
+
+    // Threading: replies to previous reviews
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(
+        name = "reply_to_id",
+        nullable = true,
+        foreignKey = @ForeignKey(
+            name = "fk_review_reply_to",
+            foreignKeyDefinition = "FOREIGN KEY (reply_to_id) REFERENCES review(id) ON DELETE SET NULL"
+        )
+    )
+    private Review replyTo;
 
     public enum Status {
         OPEN, CLOSED, PENDING, NOT_QUALIFIED

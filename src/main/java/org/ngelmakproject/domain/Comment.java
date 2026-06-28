@@ -10,9 +10,11 @@ import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
@@ -45,24 +47,27 @@ public class Comment implements Serializable {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
-    @Column(name = "content", length = 2000, nullable = false)
+    @Column(name = "content", length = 5000, nullable = false)
     @Size(max = 2000)
     private String content;
-
-    @ManyToOne(fetch = FetchType.LAZY, cascade = CascadeType.REMOVE)
-    @JsonIncludeProperties(value = { "id" })
-    private Post post;
-
-    @ManyToOne(fetch = FetchType.LAZY, cascade = CascadeType.REMOVE)
-    @JsonIncludeProperties(value = { "id" })
-    private Comment replyTo;
 
     @Column(name = "reply_count")
     private Integer replyCount = 0;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false, cascade = CascadeType.REMOVE)
-    @NotNull
+    @ManyToOne(fetch = FetchType.LAZY)
     @JsonIncludeProperties(value = { "id" })
+    @JoinColumn(name = "post_id", nullable = true, foreignKey = @ForeignKey(name = "fk_comment_post", foreignKeyDefinition = "FOREIGN KEY (post_id) REFERENCES post(id) ON DELETE SET NULL"))
+    private Post post;
+
+    @ManyToOne(fetch = FetchType.LAZY, cascade = CascadeType.REMOVE)
+    @JsonIncludeProperties(value = { "id" })
+    @JoinColumn(name = "reply_to_id", nullable = true, foreignKey = @ForeignKey(name = "fk_comment_reply_to", foreignKeyDefinition = "FOREIGN KEY (reply_to_id) REFERENCES reply_to(id) ON DELETE SET NULL"))
+    private Comment replyTo;
+
+    @NotNull
+    @ManyToOne(fetch = FetchType.LAZY, optional = false, cascade = CascadeType.REMOVE)
+    @JsonIncludeProperties(value = { "id" })
+    @JoinColumn(name = "channel_id", nullable = true, foreignKey = @ForeignKey(name = "fk_comment_channel", foreignKeyDefinition = "FOREIGN KEY (channel_id) REFERENCES channel(id) ON DELETE CASCADE"))
     private Channel channel;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = true)

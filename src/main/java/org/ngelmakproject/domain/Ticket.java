@@ -13,6 +13,8 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
@@ -45,22 +47,6 @@ public class Ticket implements Serializable {
     @Column(name = "description", length = 1000, nullable = false)
     private String description;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    private File evidence;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JsonIgnoreProperties(value = { "reports", "comments", "channel" }, allowSetters = true)
-    private Post post;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JsonIgnoreProperties(value = { "reports", "comments", "post", "replayto", "channel" }, allowSetters = true)
-    private Comment comment;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JsonIgnoreProperties(value = { "configuration", "user", "reports", "owners", "comments", "memberships",
-            "subscriptions", "posts", "reviews" }, allowSetters = true)
-    private Channel channel;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "visibility", nullable = false, length = 20)
     private Visibility visibility = Visibility.PUBLIC;
@@ -80,6 +66,25 @@ public class Ticket implements Serializable {
     /* User (auth-service) responsible for handling the ticket */
     @Column(name = "assigned_to_id")
     private Long assignedTo;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    private File evidence;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "post_id", nullable = false, foreignKey = @ForeignKey(name = "fk_ticket_post", foreignKeyDefinition = "FOREIGN KEY (post_id) REFERENCES post(id) ON DELETE CASCADE"))
+    @JsonIgnoreProperties(value = { "reports", "comments", "channel" }, allowSetters = true)
+    private Post post;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "comment_id", nullable = false, foreignKey = @ForeignKey(name = "fk_ticket_comment", foreignKeyDefinition = "FOREIGN KEY (comment_id) REFERENCES comment(id) ON DELETE CASCADE"))
+    @JsonIgnoreProperties(value = { "reports", "comments", "post", "replayto", "channel" }, allowSetters = true)
+    private Comment comment;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "channel_id", nullable = false, foreignKey = @ForeignKey(name = "fk_ticket_channel", foreignKeyDefinition = "FOREIGN KEY (channel_id) REFERENCES channel(id) ON DELETE CASCADE"))
+    @JsonIgnoreProperties(value = { "configuration", "user", "reports", "owners", "comments", "memberships",
+            "subscriptions", "posts", "reviews" }, allowSetters = true)
+    private Channel channel;
 
     public enum Visibility {
         PUBLIC, // visible to target user
