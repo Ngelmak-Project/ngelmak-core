@@ -4,8 +4,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -34,6 +36,7 @@ public class PostRedisService {
     private static final String REDIS_DELETE_KEY = "post:delete";
     private static final String REDIS_TRENDING_KEY = "post:trending";
     private static final String REDIS_REPLY_COUNT_KEY = "post:replycount";
+    private static final String REDIS_TEMP_ID_MAP_KEY = "post:temp-id-map";
 
     private final PostRepository postRepository;
     private final RedisTemplate<String, String> redis;
@@ -81,8 +84,8 @@ public class PostRedisService {
      * @param id the ID of the Post to delete
      */
     public void queueDelete(Long id) {
-        redis.opsForHash().put(REDIS_DELETE_KEY, id.toString(), id);
-        log.warn("📦 Redis | Post deleted - {}", id);
+        redis.opsForHash().put(REDIS_DELETE_KEY, id.toString(), id.toString());
+        log.debug("📦 Redis | Post deleted - {}", id);
     }
 
     /**
@@ -117,6 +120,65 @@ public class PostRedisService {
         log.debug("Trending...");
         return Optional.ofNullable(redis.opsForValue().get(REDIS_TRENDING_KEY))
                 .map(t -> CacheTools.fromJson((String) t, Trending.class));
+    }
+
+    /**
+     * Stores a temporary ID to actual ID mapping with automatic expiration.
+     *
+     * @param tempId   the temporary ID assigned during creation
+     * @param actualId the actual JPA-assigned ID after flush
+     */
+    private void storeTempIdMapping(Long tempId, Long actualId) {
+        String key = REDIS_TEMP_ID_MAP_KEY + ":" + tempId;
+        redis.opsForValue().set(key, actualId.toString(), Duration.ofMinutes(10));
+        log.debug("Stored temp ID mapping {} → {} (10min TTL)", tempId, actualId);
+    }
+
+    /**
+     * Resolves a post ID by checking if it's a temporary ID with a stored mapping
+     * to the actual JPA ID. Returns the original ID if no mapping exists.
+     *
+     * @param id the ID to resolve (may be temporary)
+     * @return the actual JPA ID if a mapping exists, otherwise the original ID
+     */
+    public Long resolvePostId(Long id) {
+        String key = REDIS_TEMP_ID_MAP_KEY + ":" + id;
+        String mapped = redis.opsForValue().get(key);
+        if (mapped != null) {
+            Long actualId = Long.parseLong(mapped);
+            log.debug("Resolved temporary ID {} to actual ID {}", id, actualId);
+            return actualId;
+        }
+        return id;
+    }
+
+    /**
+     * Retrieves pending created posts for a specific channel from Redis.
+     * These are posts that have been created but not yet flushed to the database.
+     *
+     * @param channelId the channel ID to filter by
+     * @return list of pending posts for the channel
+     */
+    public List<Post> getPendingPostsByChannel(Long channelId) {
+        Set<Object> createdKeys = redis.opsForHash().keys(REDIS_CREATE_KEY);
+        Set<Object> deleteKeys = redis.opsForHash().keys(REDIS_DELETE_KEY);
+        List<Post> pendingPosts = new ArrayList<>();
+
+        for (Object key : createdKeys) {
+            // Skip if this post is queued for deletion
+            if (deleteKeys.contains(key)) {
+                continue;
+            }
+
+            String json = (String) redis.opsForHash().get(REDIS_CREATE_KEY, key);
+            Post post = CacheTools.fromJson(json, Post.class);
+            if (post.getChannel().getId().equals(channelId)) {
+                pendingPosts.add(post);
+            }
+        }
+
+        log.debug("Retrieved {} pending posts for channel {}", pendingPosts.size(), channelId);
+        return pendingPosts;
     }
 
     private record PostScoreRecord(
@@ -163,6 +225,33 @@ public class PostRedisService {
 
             redis.opsForZSet().add(REDIS_FEED_KEY, p.getId().toString(), baseScore);
         });
+    }
+
+    /**
+     * Retrieves a pending post by its temporary ID from the CREATE queue.
+     *
+     * @param tempId the temporary ID of the post
+     * @return an Optional containing the post if found in the CREATE queue
+     */
+    public Optional<Post> getPendingPostById(Long tempId) {
+        String json = (String) redis.opsForHash().get(REDIS_CREATE_KEY, tempId.toString());
+        if (json != null) {
+            Post post = CacheTools.fromJson(json, Post.class);
+            log.debug("Found pending post with temporary ID {}", tempId);
+            return Optional.of(post);
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Removes a pending post from the CREATE queue without persisting to database.
+     * Used when a post is deleted before being flushed.
+     *
+     * @param tempId the temporary ID of the post to remove
+     */
+    public void removePendingPost(Long tempId) {
+        redis.opsForHash().delete(REDIS_CREATE_KEY, tempId.toString());
+        log.debug("Removed pending post with temporary ID {} from CREATE queue", tempId);
     }
 
     /**
@@ -220,20 +309,24 @@ public class PostRedisService {
 
     /**
      * Flushes pending CREATE and UPDATE post operations from Redis to the database.
-     * Runs every 2 seconds and persists all queued posts in batch.
+     * Runs every 20 seconds and persists all queued posts in batch.
      */
     @Transactional
-    @Scheduled(fixedDelay = 2, timeUnit = TimeUnit.SECONDS)
+    @Scheduled(fixedDelay = 20, timeUnit = TimeUnit.SECONDS)
     public void flushPendingPosts() {
         List<Post> toSave = new ArrayList<>();
+        Map<Long, Post> tempIdToPost = new HashMap<>(); // Track temp IDs
 
         // Process created posts
         Set<Object> createdKeys = redis.opsForHash().keys(REDIS_CREATE_KEY);
         for (Object key : createdKeys) {
             String json = (String) redis.opsForHash().get(REDIS_CREATE_KEY, key);
             Post newPost = CacheTools.fromJson(json, Post.class);
+            Long tempId = newPost.getId(); // Capture the temporary ID
             newPost.setId(null);
             toSave.add(newPost);
+            tempIdToPost.put(tempId, newPost); // Store for later mapping
+
             log.debug("Saved {} post(s)", createdKeys.size());
         }
         // Process updated posts
@@ -251,7 +344,19 @@ public class PostRedisService {
         }
 
         // Save all and clean up Redis
-        postRepository.saveAll(toSave);
+        List<Post> savedPosts = postRepository.saveAll(toSave);
+
+        // Map temporary IDs to actual IDs for created posts
+        for (Post saved : savedPosts) {
+            for (Map.Entry<Long, Post> entry : tempIdToPost.entrySet()) {
+                if (entry.getValue().getContent().equals(saved.getContent()) &&
+                        entry.getValue().getChannel().equals(saved.getChannel())) {
+                    // Store mapping with 10-minute TTL
+                    storeTempIdMapping(entry.getKey(), saved.getId());
+                    break;
+                }
+            }
+        }
 
         if (!createdKeys.isEmpty()) {
             // Mark all saved posts as dirty
@@ -267,10 +372,10 @@ public class PostRedisService {
 
     /**
      * Flushes pending DELETE operations from Redis to the database.
-     * Runs every 2 seconds and removes all queued post IDs in batch.
+     * Runs every 5 seconds and removes all queued post IDs in batch.
      */
     @Transactional
-    @Scheduled(fixedDelay = 2, timeUnit = TimeUnit.SECONDS)
+    @Scheduled(fixedDelay = 5, timeUnit = TimeUnit.SECONDS)
     public void flushDeleteQueue() {
         Set<Object> processedKeys = redis.opsForHash().keys(REDIS_DELETE_KEY);
         if (processedKeys.isEmpty()) {
@@ -346,7 +451,7 @@ public class PostRedisService {
 
         // If Redis empty → full recompute
         if (redisEmpty) {
-            log.warn("Redis feed is empty, performing full recompute");
+            log.debug("Redis feed is empty, performing full recompute");
             recomputeScores();
             return;
         }

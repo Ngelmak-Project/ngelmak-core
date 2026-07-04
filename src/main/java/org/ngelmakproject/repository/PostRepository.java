@@ -30,6 +30,8 @@ import jakarta.persistence.PersistenceException;
 public interface PostRepository extends JpaRepository<Post, Long> {
 	Optional<PostProjection> findProjectedById(Long id);
 
+	Integer countByChannelId(Long channelId);
+
 	@Modifying
 	@Query("UPDATE Post p SET p.deletedAt = :ts WHERE p.id IN :ids")
 	int softDeleteByIds(List<Long> ids, @Param("ts") Instant ts);
@@ -114,7 +116,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			AS score
 			FROM post p
 			LEFT JOIN channel c ON c.id = p.channel_id
-			LEFT JOIN post r ON r.post_reply_id = p.id
+			LEFT JOIN post r ON r.reply_to_id = p.id
 			LEFT JOIN post_file pf ON pf.post_id = p.id
 			LEFT JOIN file f ON f.id = pf.file_id
 			WHERE p.at >= CAST(:windowStart AS TIMESTAMP)
@@ -291,50 +293,52 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			@Param("offset") int offset);
 
 	/**
-	 * Retrieves a post by ID with channel, files, and postReply eagerly loaded.
+	 * Retrieves a post by ID with channel, files, and replyTo eagerly loaded.
 	 *
 	 * @param id the post ID
 	 * @return an Optional containing the post if found
 	 */
-	@EntityGraph(attributePaths = { "channel", "files", "postReply" })
+	@EntityGraph(attributePaths = { "channel", "files", "replyTo" })
 	Optional<Post> findById(Long id);
 
 	/**
-	 * Retrieves posts by IDs with channel, files, and postReply eagerly loaded.
+	 * Retrieves posts by IDs with channel, files, and replyTo eagerly loaded.
 	 *
 	 * @param ids the post IDs
 	 * @return a list of matching posts
 	 */
-	@EntityGraph(attributePaths = { "channel", "files", "postReply" })
+	@EntityGraph(attributePaths = { "channel", "files", "replyTo" })
 	List<Post> findAllByIdIn(List<Long> ids);
 
 	/**
 	 * Fetches posts created after a specified timestamp with channel, files, and
-	 * postReply eagerly loaded. This is used for propagating new posts to
+	 * replyTo eagerly loaded. This is used for propagating new posts to
 	 * followers.
 	 *
 	 * @param since the timestamp to filter posts
 	 * @return a list of posts created after the specified timestamp
 	 */
-	@EntityGraph(attributePaths = { "channel", "files", "postReply" })
+	@EntityGraph(attributePaths = { "channel", "files", "replyTo" })
 	@Query("SELECT p FROM Post p WHERE p.at >= :since")
 	List<Post> findByAtAfter(@Param("since") Instant since);
 
 	@Query("""
 			SELECT p FROM Post p
-			LEFT JOIN FETCH p.postReply
+			LEFT JOIN FETCH p.replyTo
 			LEFT JOIN FETCH p.channel
 			LEFT JOIN FETCH p.files
 			WHERE p.channel.id = :channelId
+			ORDER BY p.at DESC
 			""")
 	Slice<Post> findByChannel(@Param("channelId") Long channelId, Pageable pageable);
 
 	@Query("""
 			SELECT p FROM Post p
-			LEFT JOIN FETCH p.postReply
+			LEFT JOIN FETCH p.replyTo
 			LEFT JOIN FETCH p.channel
 			LEFT JOIN FETCH p.files
 			WHERE p.channel.id = :channelId AND p.visible = true
+			ORDER BY p.at DESC
 			""")
 	Slice<Post> findByChannelAndVisibleTrue(@Param("channelId") Long channelId, Pageable pageable);
 

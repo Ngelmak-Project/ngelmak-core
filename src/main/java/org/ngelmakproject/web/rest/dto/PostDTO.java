@@ -16,7 +16,7 @@ public record PostDTO(
         Set<FileDTO> files,
         ReactionSummaryDTO reactions,
         Integer commentCount,
-        PostDTO postReply) {
+        PostDTO replyTo) {
     public static PostDTO from(Post p, ReactionSummaryDTO reactions) {
         if (p == null)
             return null;
@@ -30,6 +30,6 @@ public record PostDTO(
                 p.getFiles().stream().map(FileDTO::from).collect(Collectors.toSet()),
                 reactions,
                 p.getCommentCount(),
-                from(p.getPostReply(), null));
+                from(p.getreplyTo(), null));
     }
 }

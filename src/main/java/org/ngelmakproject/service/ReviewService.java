@@ -104,7 +104,7 @@ public class ReviewService {
      * @param review the entity to update partially.
      * @return the persisted entity.
      */
-    public Optional<Review> udate(Review review) {
+    public Optional<Review> update(Review review) {
         log.debug("Request to partially update Review : {}", review);
 
         return reviewRepository

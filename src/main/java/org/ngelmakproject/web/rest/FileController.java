@@ -35,7 +35,7 @@ public class FileController {
     @PostMapping
     public ResponseEntity<List<File>> uploadMedias(
             @RequestPart("medias") List<MultipartFile> medias) {
-        log.info("Received request to upload {} media files", medias.size());
+        log.debug("Received request to upload {} media files", medias.size());
         List<File> saved = fileService.save(medias);
         return ResponseEntity.ok(saved);
     }

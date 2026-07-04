@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.ngelmakproject.domain.Channel;
-import org.ngelmakproject.repository.projection.ActiveChannelProjection;
+import org.ngelmakproject.repository.projection.ChannelProjection;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -28,6 +28,42 @@ public interface ChannelRepository extends JpaRepository<Channel, Long> {
 	 * @return an Optional containing the Channel if found, or empty if not found
 	 */
 	Optional<Channel> findOneByIdentifier(String identifier);
+
+	/**
+	 * Fetches a channel by its database id.
+	 * Also returns the total number of posts for that channel.
+	 */
+	@Query("""
+			SELECT c.id AS id,
+					c.name AS name,
+					c.identifier AS identifier,
+					c.avatar AS avatar,
+					c.banner AS banner,
+					c.description AS description,
+					c.createdAt AS createdAt,
+					(SELECT COUNT(p.id) FROM Post p WHERE p.channel.id = c.id) AS postCount
+			FROM Channel c
+			WHERE c.id = :id
+			""")
+	Optional<ChannelProjection> findChannelById(@Param("id") Long id);
+
+	/**
+	 * Fetches a channel by its unique identifier.
+	 * Also returns the total number of posts for that channel.
+	 */
+	@Query("""
+			SELECT c.id AS id,
+					c.name AS name,
+					c.identifier AS identifier,
+					c.avatar AS avatar,
+					c.banner AS banner,
+					c.description AS description,
+					c.createdAt AS createdAt,
+					(SELECT COUNT(p.id) FROM Post p WHERE p.channel.id = c.id) AS postCount
+			FROM Channel c
+			WHERE c.identifier = :identifier
+			""")
+	Optional<ChannelProjection> findChannelByIdentifier(@Param("identifier") String identifier);
 
 	Boolean existsByIdentifier(String identifier);
 
@@ -58,8 +94,7 @@ public interface ChannelRepository extends JpaRepository<Channel, Long> {
 			HAVING COUNT(p.id) > 0
 			ORDER BY COUNT(p.id) DESC, c.createdAt ASC
 			""")
-	List<ActiveChannelProjection> topActiveChannels(@Param("since") Instant since, Pageable pageable);
-
+	List<ChannelProjection> topActiveChannels(@Param("since") Instant since, Pageable pageable);
 
 	/**
 	 * Soft-deletes channel by ID.

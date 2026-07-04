@@ -2,10 +2,11 @@ package org.ngelmakproject.web.rest.dto;
 
 import java.util.List;
 
-public record SubscriptionStatsDTO(
+public record EngagementStats(
         Long channelId,
-        int followersCount,
-        int followingCount,
+        Integer postCount,
+        Integer followersCount,
+        Integer followingCount,
         List<SubscriptionDTO> followers,
         List<SubscriptionDTO> following) {
 }

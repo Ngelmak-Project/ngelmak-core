@@ -97,7 +97,9 @@ public class PostService {
     @Transactional(readOnly = false) // override default readOnly for write operation
     public Post save(Post post, List<MultipartFile> medias, List<MultipartFile> covers) {
         log.debug("Request to save Post : {} | {}x file(s) and {}x cover(s)",
-                post, medias.size(), covers.size());
+                post,
+                medias.size(),
+                covers.stream().filter(c -> c != null && c.getSize() > 0).count());
 
         // Validate content
         validatePostContent(post.getContent());
@@ -106,7 +108,7 @@ public class PostService {
                     // Save media files
                     List<File> files = fileService.save(medias, covers);
                     // Prepare entity
-                    post.visible(post.getVisible() != null ? post.getVisible() : true)
+                    post.visible(Optional.ofNullable(post.getVisible()).orElse(false))
                             .at(Instant.now())
                             .files(new HashSet<>(files))
                             .channel(channel);
@@ -128,13 +130,19 @@ public class PostService {
      * @return the updated Post
      */
     @Transactional(readOnly = false) // override default readOnly for write operation
-    public Post update(Post post, List<File> deletedMedias,
-            List<MultipartFile> medias, List<MultipartFile> covers) {
-        log.debug("Request to update Post : {} | {}x file(s), {}x cover(s), {}x to delete", post, medias.size(),
-                covers.size(), deletedMedias.size());
+    public Post update(Post post, List<File> deletedMedias, List<MultipartFile> medias, List<MultipartFile> covers) {
+        log.debug("Request to update Post : {} | {}x file(s), {}x cover(s), {}x to delete",
+                post,
+                medias.size(),
+                covers.stream().filter(c -> c != null && c.getSize() > 0).count(),
+                deletedMedias.size());
 
         // Validate content
         validatePostContent(post.getContent());
+
+        // Resolve temporary ID to actual ID
+        Long actualId = postRedisService.resolvePostId(post.getId());
+        post.setId(actualId);
 
         var channel = channelService.findOneByCurrentUser().orElseThrow(ChannelNotFoundException::new);
         return postRepository.findById(post.getId())
@@ -145,9 +153,11 @@ public class PostService {
                                 channel.getUser(), existing.getId(), ENTITY_NAME);
                     }
 
-                    // Save new files
+                    // Save new files and remove deleted files from the post's file set
+                    existing.getFiles().removeAll(deletedMedias);
                     List<File> newFiles = fileService.save(medias, covers);
                     existing.getFiles().addAll(newFiles);
+
                     // Apply updates
                     if (post.getKeywords() != null)
                         existing.setKeywords(post.getKeywords());
@@ -158,7 +168,7 @@ public class PostService {
                     existing.setLastUpdate(Instant.now());
 
                     // Save to Redis
-                    postRedisService.queueUpdate(post);
+                    postRedisService.queueUpdate(existing);
 
                     // Delete removed files (irreversible)
                     fileService.deleteByIds(deletedMedias.stream().map(File::getId).toList());
@@ -197,9 +207,12 @@ public class PostService {
      * @param id the id of the entity.
      * @return the entity.
      */
+    @Transactional(readOnly = true)
     public Optional<Post> findOne(Long id) {
         log.debug("Request to get Post : {}", id);
-        return postRepository.findById(id);
+        // Resolve temporary ID to actual ID
+        Long actualId = postRedisService.resolvePostId(id);
+        return postRepository.findById(actualId);
     }
 
     /**
@@ -207,20 +220,44 @@ public class PostService {
      *
      * @param id the id of the entity.
      */
+    @Transactional(readOnly = true)
     public void delete(Long id) {
-        log.debug("Request to delete Comment : {}", id);
+        log.debug("Delete request received for Post ID={}", id);
+
         var channel = channelService.findOneByCurrentUser()
                 .orElseThrow(ChannelNotFoundException::new);
 
-        postRepository.findProjectedById(id).ifPresent(projection -> {
-            // Authorization check: ensure the comment belongs to the current user
-            if (!channel.getId().equals(projection.getChannelId())) {
-                throw new UnauthorizedResourceAccessException(
-                        channel.getUser(), id, ENTITY_NAME);
+        // Check if it's still a pending post in Redis
+        Optional<Post> pendingPost = postRedisService.getPendingPostById(id);
+
+        if (pendingPost.isPresent()) {
+            Post post = pendingPost.get();
+
+            if (!channel.getId().equals(post.getChannel().getId())) {
+                log.warn("Unauthorized delete attempt on pending Post ID={} by User={}", id, channel.getUser());
+                throw new UnauthorizedResourceAccessException(channel.getUser(), id, ENTITY_NAME);
             }
-            // No pending CREATE found → queue a DELETE operation
-            postRedisService.queueDelete(id);
-        });
+
+            postRedisService.removePendingPost(id);
+            log.debug("Pending Post ID={} removed from Redis CREATE queue", id);
+            return;
+        }
+
+        // Resolve temporary ID to actual ID
+        Long actualId = postRedisService.resolvePostId(id);
+        log.debug("Resolved Post ID={} to actual ID={}", id, actualId);
+
+        postRepository.findProjectedById(actualId).ifPresentOrElse(projection -> {
+            if (!channel.getId().equals(projection.getChannel().getId())) {
+                log.warn("Unauthorized delete attempt on persisted Post ID={} by User={}", actualId,
+                        channel.getUser());
+                throw new UnauthorizedResourceAccessException(channel.getUser(), actualId, ENTITY_NAME);
+            }
+
+            postRedisService.queueDelete(actualId);
+            log.debug("Persisted Post ID={} queued for DELETE operation", actualId);
+
+        }, () -> log.debug("No persisted Post found for ID={}", actualId));
     }
 
     /**
@@ -234,12 +271,21 @@ public class PostService {
      * @param pageable
      * @return
      */
+    @Transactional(readOnly = true)
     public PageDTO<PostDTO> getPostByAuthenticatedUser(Pageable pageable) {
         Channel channel = channelService.findOneByCurrentUser().orElseThrow(ChannelNotFoundException::new);
-        List<Post> posts = this.postRepository.findByChannel(
-                channel.getId(),
-                pageable).getContent();
-        var postDTOs = filloutReactions(posts, channel.getId());
+
+        // Get posts from database
+        List<Post> posts = this.postRepository.findByChannel(channel.getId(), pageable).getContent();
+
+        // Get pending created posts from Redis for this channel
+        List<Post> pendingPosts = postRedisService.getPendingPostsByChannel(channel.getId());
+
+        // Combine both lists
+        List<Post> allPosts = new ArrayList<>(pendingPosts);
+        allPosts.addAll(posts);
+
+        var postDTOs = filloutReactions(allPosts, channel.getId());
         Page<PostDTO> page = new PageImpl<>(postDTOs, pageable, postDTOs.size());
         return PageDTO.from(page);
     }
@@ -255,6 +301,7 @@ public class PostService {
      * @param pageable
      * @return
      */
+    @Transactional(readOnly = true)
     public PageDTO<PostDTO> getPostByChannel(Long channelId, Pageable pageable) {
         // 1. Fetch post entries with channels, and files
         List<Post> posts = this.postRepository.findByChannelAndVisibleTrue(
@@ -310,7 +357,7 @@ public class PostService {
      * @param pageable   pagination information
      * @return a feed page containing enriched posts and pagination metadata
      */
-
+    @Transactional(readOnly = true)
     public FeedPageDTO<PostDTO> getFeed(String sessionKey, Pageable pageable) {
         // If no session key provided → generate timestamp
         String key = (sessionKey == null || sessionKey.isBlank())
@@ -373,6 +420,7 @@ public class PostService {
      * @param pageable the pagination information.
      * @return the paginated list of posts matching the search criteria.
      */
+    @Transactional(readOnly = true)
     public FeedPageDTO<PostDTO> searchFullText(String query, Pageable pageable) {
         // 1. Fetch feed entries with posts, channels, and files
         Optional<Channel> optional = channelService.findOneByCurrentUser();
@@ -421,9 +469,10 @@ public class PostService {
      * @return Trending object containing top channels and post lists with reaction
      *         summaries.
      */
+    @Transactional(readOnly = true)
     public Trending getTrending() {
         Trending trending = postRedisService.getTrending().orElseGet(() -> {
-            log.warn("🦋 Cache miss for trending, fetching from database");
+            log.debug("🦋 Cache miss for trending, fetching from database");
 
             List<Long> trendingPostIds = fetchPostsWithFallback(
                     since -> postRepository.trendingPosts(since, PageRequest.of(0, 5)));
@@ -547,7 +596,7 @@ public class PostService {
         // Save all feeds
         if (!feeds.isEmpty()) {
             feedRepository.saveAll(feeds);
-            log.info("Created {} feed entries for {} posts", feeds.size(), posts.size());
+            log.debug("Created {} feed entries for {} posts", feeds.size(), posts.size());
         }
     }
 
@@ -597,7 +646,7 @@ public class PostService {
         // Hard delete posts
         postRepository.deleteAllByIdInBatch(postIds);
 
-        log.info("Purged {} posts and {} files older than {}",
+        log.debug("Purged {} posts and {} files older than {}",
                 postIds.size(), fileIds.size(), cutoff);
     }
 }

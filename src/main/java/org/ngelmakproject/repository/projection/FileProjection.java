@@ -23,5 +23,9 @@ public interface FileProjection {
 
     public Instant getDeletedAt();
 
-    public Long getCoverId();
+    public FileRef getCover();
+
+    interface FileRef {
+        Long getId();
+    }
 }

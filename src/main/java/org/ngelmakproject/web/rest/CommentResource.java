@@ -69,7 +69,7 @@ public class CommentResource {
     public ResponseEntity<CommentDTO> createComment(@RequestPart Comment comment,
             @RequestPart(required = false, name = "media") Optional<MultipartFile> media)
             throws URISyntaxException, MalformedURLException {
-        log.info("REST request to save Comment : {} + {}x media", comment, media.map(e -> 1).orElse(0));
+        log.debug("REST request to save Comment : {} + {}x media", comment, media.map(e -> 1).orElse(0));
         if (comment.getId() != null) {
             throw new BadRequestAlertException("A new comment cannot already have an ID", ENTITY_NAME, "idexists");
         }

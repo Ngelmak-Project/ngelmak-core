@@ -67,13 +67,13 @@ public class Post implements Serializable {
 
     @JsonIncludeProperties(value = { "id", "content", "at", "channel" })
     @ManyToOne(fetch = FetchType.LAZY, optional = true)
-    @JoinColumn(name = "post_reply_id", nullable = true, foreignKey = @ForeignKey(name = "fk_post_postreply", foreignKeyDefinition = "FOREIGN KEY (reply_id) REFERENCES post(id) ON DELETE SET NULL"))
-    private Post postReply;
+    @JoinColumn(name = "reply_to_id", nullable = true, foreignKey = @ForeignKey(name = "fk_post_replyTo", foreignKeyDefinition = "FOREIGN KEY (reply_to_id) REFERENCES post(id) ON DELETE SET NULL"))
+    private Post replyTo;
 
     @ManyToOne(fetch = FetchType.EAGER, optional = false)
     @NotNull
     @JsonIncludeProperties(value = { "id", "identifier", "name", "avatar" })
-    @JoinColumn(name = "post_channel_id", nullable = true, foreignKey = @ForeignKey(name = "fk_post_postchannel", foreignKeyDefinition = "FOREIGN KEY (channel_id) REFERENCES post(id) ON DELETE CASCADE"))
+    @JoinColumn(name = "channel_id", nullable = true, foreignKey = @ForeignKey(name = "fk_post_postchannel", foreignKeyDefinition = "FOREIGN KEY (channel_id) REFERENCES post(id) ON DELETE CASCADE"))
     private Channel channel;
 
     @ManyToMany
@@ -211,16 +211,16 @@ public class Post implements Serializable {
         this.commentCount = commentCount;
     }
 
-    public Post getPostReply() {
-        return this.postReply;
+    public Post getreplyTo() {
+        return this.replyTo;
     }
 
-    public void setPostReply(Post postReply) {
-        this.postReply = postReply;
+    public void setreplyTo(Post replyTo) {
+        this.replyTo = replyTo;
     }
 
-    public Post postReply(Post postReply) {
-        this.setPostReply(postReply);
+    public Post replyTo(Post replyTo) {
+        this.setreplyTo(replyTo);
         return this;
     }
 
@@ -263,7 +263,8 @@ public class Post implements Serializable {
                 ", lastUpdate='" + getLastUpdate() + "'" +
                 ", visible='" + getVisible() + "'" +
                 ", content='" + getContent() + "'" +
-                ", reply='" + getPostReply() + "'" +
+                ", reply='" + getreplyTo() + "'" +
+                ", files='" + getFiles() + "'" +
                 "}";
     }
 }

@@ -10,14 +10,16 @@ import java.util.Optional;
 import org.ngelmakproject.domain.Channel;
 import org.ngelmakproject.domain.Subscription;
 import org.ngelmakproject.repository.ChannelRepository;
+import org.ngelmakproject.repository.PostRepository;
 import org.ngelmakproject.repository.SubscriptionRepository;
-import org.ngelmakproject.repository.projection.ActiveChannelProjection;
+import org.ngelmakproject.repository.projection.ChannelProjection;
 import org.ngelmakproject.security.UserService;
 import org.ngelmakproject.service.cache.ChannelRedisService;
 import org.ngelmakproject.web.rest.dto.ActiveChannel;
 import org.ngelmakproject.web.rest.dto.ChannelDTO;
 import org.ngelmakproject.web.rest.dto.SubscriptionDTO;
-import org.ngelmakproject.web.rest.dto.SubscriptionStatsDTO;
+import org.ngelmakproject.web.rest.dto.EngagementStats;
+import org.ngelmakproject.web.rest.errors.ChannelAlreadyExistsException;
 import org.ngelmakproject.web.rest.errors.ChannelNotFoundException;
 import org.ngelmakproject.web.rest.errors.UnauthorizedResourceAccessException;
 import org.slf4j.Logger;
@@ -37,6 +39,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Transactional
 public class ChannelService {
 
+    private final PostRepository postRepository;
     private static final Logger log = LoggerFactory.getLogger(ChannelService.class);
     private static final String ENTITY_NAME = "channel";
 
@@ -48,11 +51,12 @@ public class ChannelService {
     public ChannelService(ChannelRepository channelRepository,
             SubscriptionRepository subscriptionRepository,
             FileService fileService,
-            ChannelRedisService channelRedisService) {
+            ChannelRedisService channelRedisService, PostRepository postRepository) {
         this.channelRepository = channelRepository;
         this.subscriptionRepository = subscriptionRepository;
         this.fileService = fileService;
         this.channelRedisService = channelRedisService;
+        this.postRepository = postRepository;
     }
 
     /**
@@ -72,7 +76,14 @@ public class ChannelService {
      * @return the persisted channel
      */
     public Channel save(Channel channel) {
-        log.info("Request to save Channel : {}", channel);
+        log.debug("Request to save Channel : {}", channel);
+
+        // Check if the user already has a channel
+        findOneByCurrentUser()
+                .ifPresent(existing -> {
+                    log.debug("User already has a channel: {}", existing);
+                    throw new ChannelAlreadyExistsException();
+                });
 
         // Assign owner
         Long userId = UserService.getAuthenticatedUser()
@@ -84,8 +95,9 @@ public class ChannelService {
         channel.setIdentifier(generateUniqueIdentifier(channel.getName()));
         channel.setCreatedAt(Instant.now());
         // Save the channel to Redis.
-        channelRedisService.updateCurrentUserChannel(channel);
-        return channelRepository.save(channel);
+        var newChannel = channelRepository.save(channel);
+        channelRedisService.updateCurrentUserChannel(newChannel);
+        return newChannel;
     }
 
     /**
@@ -198,8 +210,8 @@ public class ChannelService {
     @Transactional(readOnly = true)
     public Optional<ChannelDTO> findOne(Long id) {
         log.debug("Request to get Channel : {}", id);
-        return channelRepository.findById(id).map(channel -> {
-            var stats = getSubscriptionStatistics(channel.getId());
+        return channelRepository.findChannelById(id).map(channel -> {
+            var stats = getSubscriptionStatistics(channel.getId(), channel.getPostCount());
             return ChannelDTO.from(channel, stats);
         });
     }
@@ -213,8 +225,8 @@ public class ChannelService {
     @Transactional(readOnly = true)
     public Optional<ChannelDTO> findOneByIdentifier(String identifier) {
         log.debug("Request to get Channel : {}", identifier);
-        return channelRepository.findOneByIdentifier(identifier).map(channel -> {
-            var stats = getSubscriptionStatistics(channel.getId());
+        return channelRepository.findChannelByIdentifier(identifier).map(channel -> {
+            var stats = getSubscriptionStatistics(channel.getId(), channel.getPostCount());
             return ChannelDTO.from(channel, stats);
         });
     }
@@ -235,7 +247,7 @@ public class ChannelService {
     @Transactional(readOnly = true)
     public Optional<ChannelDTO> findChannelDetails() {
         return this.findOneByCurrentUser().map(channel -> {
-            var stats = getSubscriptionStatistics(channel.getId());
+            var stats = getSubscriptionStatistics(channel.getId(), postRepository.countByChannelId(channel.getId()));
             return ChannelDTO.from(channel, stats);
         });
     }
@@ -285,7 +297,7 @@ public class ChannelService {
     public Channel updateAvatar(MultipartFile media) {
         return this.findOneByCurrentUser().map(
                 channel -> {
-                    log.info("Request to update Channel avatar : {}", channel);
+                    log.debug("Request to update Channel avatar : {}", channel);
                     String deletedAvatarUrl = channel.getAvatar();
                     var file = fileService.save(List.of(media)).get(0);
                     channel.setAvatar(file.getUrl());
@@ -399,7 +411,7 @@ public class ChannelService {
         long[] dayOffsets = { 7, 30, 90 };
 
         for (long days : dayOffsets) {
-            List<ActiveChannelProjection> activeChannel = this.channelRepository.topActiveChannels(
+            List<ChannelProjection> activeChannel = this.channelRepository.topActiveChannels(
                     Instant.now().minus(days, ChronoUnit.DAYS), PageRequest.of(0, 10));
             if (!activeChannel.isEmpty()) {
                 return activeChannel.stream()
@@ -432,7 +444,7 @@ public class ChannelService {
      * @throws ChannelNotFoundException if the channel does not exist
      */
     @Transactional(readOnly = true)
-    public SubscriptionStatsDTO getSubscriptionStatistics(Long channelId) {
+    public EngagementStats getSubscriptionStatistics(Long channelId, Integer postCount) {
         log.debug("Request to get Subscriptions : {}", channelId);
 
         // Fetch all subscriptions where this channel appears
@@ -450,8 +462,9 @@ public class ChannelService {
                 .toList();
 
         // Build the DTO
-        return new SubscriptionStatsDTO(
+        return new EngagementStats(
                 channelId,
+                postCount,
                 followers.size(),
                 following.size(),
                 followers,

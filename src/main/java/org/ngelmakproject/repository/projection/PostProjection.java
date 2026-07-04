@@ -14,13 +14,21 @@ public interface PostProjection {
 
     String getContent();
 
-    Long getReplyToId();
+    replyToRef getreplyTo();
 
-    Long getChannelId();
+    ChannelRef getChannel();
 
-    Set<FileProjection> getFiles();
+    Set<FileRef> getFiles();
 
-    interface FileProjection {
+    interface replyToRef {
+        Long getId();
+    }
+
+    interface ChannelRef {
+        Long getId();
+    }
+
+    interface FileRef {
         Long getId();
     }
 }

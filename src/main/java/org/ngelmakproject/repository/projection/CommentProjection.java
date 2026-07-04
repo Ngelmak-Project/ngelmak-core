@@ -13,13 +13,29 @@ public interface CommentProjection {
 
     String getContent();
 
-    Long getPostId();
+    PostRef getPost();
 
-    Long getReplyToId();
+    CommentRef getReplyTo();
 
-    Long getChannelId();
+    ChannelRef getChannel();
 
-    Long getFileId();
+    FileRef getFile();
 
     Integer getReplyCount();
+
+    interface PostRef {
+        Long getId();
+    }
+
+    interface CommentRef {
+        Long getId();
+    }
+
+    interface ChannelRef {
+        Long getId();
+    }
+
+    interface FileRef {
+        Long getId();
+    }
 }

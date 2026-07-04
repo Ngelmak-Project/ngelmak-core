@@ -61,7 +61,7 @@ public class TicketResource {
     @PostMapping("")
     public ResponseEntity<TicketDTO> createTicket(@RequestPart(name = "ticket", required = true) Ticket ticket,
             @RequestPart(name = "media", required = false) Optional<MultipartFile> media) {
-        log.info("REST request to save Ticket : {} + {}x media", ticket, media.map(e -> 1).orElse(0));
+        log.debug("REST request to save Ticket : {} + {}x media", ticket, media.map(e -> 1).orElse(0));
         if (ticket.getId() != null) {
             throw new BadRequestAlertException("A new ticket cannot already have an ID", ENTITY_NAME, "idexists");
         }
@@ -81,7 +81,7 @@ public class TicketResource {
     @GetMapping("")
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<PageDTO<Ticket>> getAllTickets(Pageable pageable) {
-        log.info("REST request to get a page of Tickets");
+        log.debug("REST request to get a page of Tickets");
         Page<Ticket> page = ticketService.findAll(pageable);
         return ResponseEntity.ok().body(PageDTO.from(page));
     }
@@ -115,7 +115,7 @@ public class TicketResource {
     @GetMapping("/user-activity-reports")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<PageDTO<Ticket>> userActivityReports(Pageable pageable) {
-        log.info("REST request to get a page of Tickets that concern the current user activity");
+        log.debug("REST request to get a page of Tickets that concern the current user activity");
         Page<Ticket> page = ticketService.findAllUserActivityReports(pageable);
         return ResponseEntity.ok().body(PageDTO.from(page));
     }

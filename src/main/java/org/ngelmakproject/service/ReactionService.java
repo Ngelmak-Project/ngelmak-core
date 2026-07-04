@@ -99,7 +99,7 @@ public class ReactionService {
                 .orElseThrow(ChannelNotFoundException::new);
 
         reactionRedisService.queueDelete(id, channel);
-        log.info("Queued DELETE operation for reaction {}", id);
+        log.debug("Queued DELETE operation for reaction {}", id);
     }
 
     /**

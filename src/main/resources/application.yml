@@ -3,30 +3,23 @@ spring:
     name: "Ngelmak Project - Core"
 
   profiles:
-    active: prod # or prod
+    active: dev
 
   config.import: optional:vault:// # Enable Vault as a Config Data source. This requires at least one Vault backend to be enabled and resolvable.
   cloud:
     vault:
       uri: http://vault:8200
       authentication: approle
-      fail-fast: true # Enable fail-fast to force confirmation. Spring Boot to crash immediately when Vault/OpenBao is not reachable
+      fail-fast: false # Enable fail-fast to force confirmation. Spring Boot to crash immediately when Vault/OpenBao is not reachable
       app-role:
-        role-id: ${VAULT_ROLE_ID} # The Vault AppRole Role ID
-        secret-id: ${VAULT_SECRET_ID} # The Vault AppRole Secret ID
+        role-id: ""
+        secret-id: ""
       database:
-        enabled: true # Disable the database backend if not needed. Set to true if you want to use Vault's database secrets engine for dynamic credentials.
-        backend: database
-        role: ngelmak-springboot-role
+        enabled: false
       kv:
-        enabled: true
-        application-name: "" # skip the application name prefix
-        backend: secret # The Vault KV backend path (e.g. "secret" for KV v2 or "kv" for KV v1)
-        default-context: jjwt/prod
+        enabled: false
 
   datasource:
-    # hikari:
-    #   initialization-fail-timeout: 0 # Don't fail on startup if the database is unavailable. Useful for development and testing environments.
     url: jdbc:postgresql://postgres:5432/ngelmakdb
     # username:
     # password:
@@ -35,8 +28,6 @@ spring:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: update # Use application-bootstrap.yml for updating the database schema
-  liquibase:
-    enabled: false
   data:
     redis:
       host: redis
@@ -56,13 +47,10 @@ spring:
     multipart: # Upload limits
       max-file-size: 50MB
       max-request-size: 200MB
-
   resources:
     cache-period: 86400
-
 server:
   port: 5742
-
 spring.devtools.livereload.port: 35743
 
 logging:

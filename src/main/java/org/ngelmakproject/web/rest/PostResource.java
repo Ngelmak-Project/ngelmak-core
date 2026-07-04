@@ -67,16 +67,16 @@ public class PostResource {
     @PostMapping("")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<PostDTO> createPost(@RequestPart Post post,
-            @RequestPart(required = false) Optional<List<MultipartFile>> _medias,
-            @RequestPart(required = false) Optional<List<MultipartFile>> _covers)
+            @RequestPart(required = false) Optional<List<MultipartFile>> medias,
+            @RequestPart(required = false) Optional<List<MultipartFile>> covers)
             throws URISyntaxException {
-        List<MultipartFile> medias = _medias.orElse(List.of());
-        List<MultipartFile> covers = _covers.orElse(List.of());
-        log.info("REST request to save Post : {} + {}x media(s) and {}x cover(s)", post, medias.size(), covers.size());
+        List<MultipartFile> medias$ = medias.orElse(List.of());
+        List<MultipartFile> covers$ = covers.orElse(List.of());
+        log.debug("REST request to save Post : {} + {}x media(s) and {}x cover(s)", post, medias$.size(), covers$.size());
         if (post.getId() != null) {
             throw new BadRequestAlertException("A new post cannot already have an ID", ENTITY_NAME, "idexists");
         }
-        post = postService.save(post, medias, covers);
+        post = postService.save(post, medias$, covers$);
         return ResponseEntity.ok().body(PostDTO.from(post, null));
     }
 
@@ -97,19 +97,19 @@ public class PostResource {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<PostDTO> updatePost(
             @RequestPart Post post,
-            @RequestPart(required = false) Optional<List<File>> _deletedFiles,
-            @RequestPart(required = false) Optional<List<MultipartFile>> _medias,
-            @RequestPart(required = false) Optional<List<MultipartFile>> _covers)
+            @RequestPart(required = false) Optional<List<File>> deletedFiles,
+            @RequestPart(required = false) Optional<List<MultipartFile>> medias,
+            @RequestPart(required = false) Optional<List<MultipartFile>> covers)
             throws URISyntaxException, IOException {
-        List<File> deletedFiles = _deletedFiles.orElse(List.of());
-        List<MultipartFile> medias = _medias.orElse(List.of());
-        List<MultipartFile> covers = _covers.orElse(List.of());
-        log.info("REST request to save Post : {} | {}x media(s), {}x cover(s), and {}x to be deleted", post,
-                medias.size(), covers.size(), deletedFiles.size());
+        List<File> deletedFiles$ = deletedFiles.orElse(List.of());
+        List<MultipartFile> medias$ = medias.orElse(List.of());
+        List<MultipartFile> covers$ = covers.orElse(List.of());
+        log.debug("REST request to save Post : {} | {}x media(s), {}x cover(s), and {}x to be deleted", post,
+                medias$.size(), covers$.size(), deletedFiles$.size());
         if (post.getId() == null) {
             throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
         }
-        post = postService.update(post, deletedFiles, medias, covers);
+        post = postService.update(post, deletedFiles$, medias$, covers$);
         return ResponseEntity.ok()
                 .body(PostDTO.from(post, null));
     }
@@ -124,7 +124,7 @@ public class PostResource {
      */
     @GetMapping("/channel/{channelId}")
     public ResponseEntity<PageDTO<PostDTO>> getPostByChannel(@PathVariable Long channelId, Pageable pageable) {
-        log.info("REST request to get a page of Posts by Channel : {}", channelId);
+        log.debug("REST request to get a page of Posts by Channel : {}", channelId);
         PageDTO<PostDTO> page = postService.getPostByChannel(channelId, pageable);
         return ResponseEntity.ok().cacheControl(CacheControl.maxAge(60, TimeUnit.SECONDS))
                 .body(page);

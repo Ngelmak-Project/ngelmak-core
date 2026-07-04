@@ -1,6 +1,8 @@
 package org.ngelmakproject.repository.projection;
 
-public interface ActiveChannelProjection {
+import java.time.Instant;
+
+public interface ChannelProjection {
     Long getId();
 
     String getName();
@@ -12,6 +14,8 @@ public interface ActiveChannelProjection {
     String getAvatar();
 
     String getDescription();
+
+    Instant getCreatedAt();
 
     Integer getPostCount();
 }

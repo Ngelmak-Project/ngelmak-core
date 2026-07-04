@@ -78,7 +78,7 @@ public class ReviewResource {
             throw new BadRequestAlertException("Invalid review ID", ENTITY_NAME, "idnull");
         }
 
-        return ResponseUtil.wrapOrNotFound(reviewService.udate(review).map(ReviewDTO::from));
+        return ResponseUtil.wrapOrNotFound(reviewService.update(review).map(ReviewDTO::from));
     }
 
     /**

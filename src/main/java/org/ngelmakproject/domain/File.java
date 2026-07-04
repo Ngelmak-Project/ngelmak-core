@@ -2,6 +2,7 @@ package org.ngelmakproject.domain;
 
 import java.io.Serializable;
 import java.time.Instant;
+import java.util.Objects;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIncludeProperties;
@@ -159,5 +160,39 @@ public class File implements Serializable {
 
     public void setCover(File cover) {
         this.cover = cover;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof File)) {
+            return false;
+        }
+
+        File file = (File) o;
+
+        if (this.id != null && this.id.equals(file.id)) {
+            return true;
+        }
+
+        if (this.url != null && this.url.equals(file.url)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
+
+    @Override
+    public String toString() {
+        return "File {id=" + id + ", filename=" + filename + ", size=" + size + ", duration="
+                + duration + ", type=" + type + ", usageCount="
+                + usageCount + ", createdAt=" + createdAt + ", cover=" + cover + "}";
     }
 }

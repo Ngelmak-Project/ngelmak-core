@@ -1,13 +1,9 @@
 spring:
   datasource:
-    # url: jdbc:postgresql://localhost:5432/ngelmakdb
-    username: app_migrator
-    password: migratorpassword
+    url: jdbc:postgresql://postgres:5432/ngelmakdb
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
   jpa:
     hibernate:
       ddl-auto: update   # or create / create-drop
     show-sql: true
-
-  liquibase:
-    enabled: ${liquibase.run:false}
-    change-log: classpath:config/liquibase/master.xml

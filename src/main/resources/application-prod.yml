@@ -1,44 +1,74 @@
 spring:
   application:
     name: "Ngelmak Project - Core"
-
+  config:
+    import: vault:// # Enable Vault as a Config Data source
   cloud:
     vault:
-      uri: http://vault:8200 # vault docker service name and port
+      uri: http://vault:8200
       authentication: approle
       fail-fast: true # Enable fail-fast to force confirmation. Spring Boot to crash immediately when Vault/OpenBao is not reachable
       app-role:
-        role-id: ${VAULT_ROLE_ID} # The Vault AppRole Role ID
-        secret-id: ${VAULT_SECRET_ID} # The Vault AppRole Secret ID
+        role-id: ${VAULT_ROLE_ID}
+        secret-id: ${VAULT_SECRET_ID}
       database:
-        enabled: true # Disable the database backend if not needed. Set to true if you want to use Vault's database secrets engine for dynamic credentials.
+        enabled: true
         backend: database
         role: ngelmak-springboot-role # The Vault role that has permissions to access the database credentials
       kv:
         enabled: true
-
+        backend: secret
+        application-name: jjwt
+        default-context: "" # or omit this entirely
   datasource:
-    hikari:
-      initialization-fail-timeout: 0
+    hikari.initialization-fail-timeout: 0
+    hikari.max-lifetime: 1800000 # 30 minutes
+    hikari.idleTimeout: 600000 # 10 minutes
+    hikari.maxLifetime: 600000 # 10 minutes
+    hikari.validation-timeout: 5000
     url: jdbc:postgresql://postgres:5432/ngelmakdb
-
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: none # Use application-bootstrap.yml for updating the database schema
+  jackson:
+    serialization:
+      fail-on-empty-beans: false
+  data:
+    redis:
+      host: redis
+      port: 6379
+      timeout: 60000ms
+      jedis:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
   servlet:
     multipart:
       enabled: true
       max-file-size: 30MB
       max-request-size: 30MB
       resolve-lazily: false
-
   resources:
     cache-period: 86400
 
-logging:
-  level:
-    org.springframework.vault: DEBUG
-    org.springframework.boot.autoconfigure: INFO
+server:
+  port: 37373
+# Will be set by vault
+jwt-secret-key:
+
+# SeaweedFS configuration
+seaweedfs:
+  filer:
+    url: http://filer:9555
+file:
+  public:
+    base-url: https://storage.ngelmak.org
 
 debug: false
+logging:
+  level:
+    root: INFO
+    "[org.springframework.vault]": DEBUG

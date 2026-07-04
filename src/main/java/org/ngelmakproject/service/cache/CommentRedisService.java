@@ -159,14 +159,14 @@ public class CommentRedisService {
 
         Set<Long> toDeleteIds = toDelete.stream().map(CommentProjection::getId).collect(Collectors.toSet());
         Set<Long> replyCommentIds = toDelete.stream()
-                .map(CommentProjection::getReplyToId)
+                .map(c -> c.getReplyTo().getId())
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
         commentRepository.softDeleteByIds(toDeleteIds, Instant.now());
         commentRepository.updateReplyCount(replyCommentIds);
         toDelete.stream()
-                .map(CommentProjection::getPostId)
+                .map(c -> c.getPost().getId())
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet())
                 .forEach(postRedisService::queueCommmentCount);
