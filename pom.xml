@@ -147,14 +147,6 @@
 			<artifactId>postgresql</artifactId>
 			<scope>runtime</scope> <!-- Required at runtime for database connectivity -->
 		</dependency>
-		<dependency>
-			<!-- Liquibase for database versioning and data loading -->
-			<!-- This library is used for database schema management and version control, allowing you to
-			load fake data for testing and development. -->
-			<groupId>org.liquibase</groupId>
-			<artifactId>liquibase-core</artifactId>
-		</dependency>
-
 
 		<!-- Spring Boot DevTools: adds hot reload, auto restart, and other dev-time features -->
 		<dependency>

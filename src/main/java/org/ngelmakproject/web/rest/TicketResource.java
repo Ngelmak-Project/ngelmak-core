@@ -32,7 +32,7 @@ import org.springframework.web.multipart.MultipartFile;
  * REST controller for managing {@link org.ngelmakproject.domain.Ticket}.
  */
 @RestController
-@RequestMapping("/api/tickets")
+@RequestMapping("/api/v1/tickets")
 public class TicketResource {
 
     private static final Logger log = LoggerFactory.getLogger(TicketResource.class);

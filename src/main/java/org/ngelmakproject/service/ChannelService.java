@@ -248,6 +248,7 @@ public class ChannelService {
     public Optional<ChannelDTO> findChannelDetails() {
         return this.findOneByCurrentUser().map(channel -> {
             var stats = getSubscriptionStatistics(channel.getId(), postRepository.countByChannelId(channel.getId()));
+            log.info("Retrieved channel details for current user : {}", channel);
             return ChannelDTO.from(channel, stats);
         });
     }

@@ -3,6 +3,9 @@ package org.ngelmakproject.domain;
 import java.io.Serializable;
 import java.time.Instant;
 
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -35,11 +38,13 @@ public class Review implements Serializable {
     private Long id;
 
     // When the review was created
+    @CreatedDate
     @NotNull
-    @Column(name = "created_at", nullable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
     // When the review was last updated
+    @LastModifiedDate
     @Column(name = "updated_at")
     private Instant updatedAt;
 

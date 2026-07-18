@@ -5,6 +5,9 @@ import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
 
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIncludeProperties;
 
@@ -43,14 +46,16 @@ public class Post implements Serializable {
     @Column(name = "keywords")
     private String keywords;
 
+    @CreatedDate
     @NotNull
-    @Column(name = "at", nullable = false)
+    @Column(name = "at", nullable = false, updatable = false)
     private Instant at;
 
     @JsonIgnore
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    @LastModifiedDate
     @Column(name = "last_update")
     private Instant lastUpdate;
 
@@ -59,7 +64,7 @@ public class Post implements Serializable {
 
     /** The content of the post. */
     @Column(name = "content", columnDefinition = "TEXT", nullable = false)
-    @Size(max = 10000)
+    @Size(max = 10_000)
     private String content;
 
     @Column(name = "comment_count")

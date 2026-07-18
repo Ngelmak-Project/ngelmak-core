@@ -105,7 +105,7 @@ Create the application database and migration user:
 
 ```sql
 -- Connect to PostgreSQL as superuser
-psql -U postgres
+psql -U admin postgres
 
 -- Create the application database
 CREATE DATABASE ngelmakdb OWNER postgres;
@@ -330,7 +330,8 @@ private String jwtSecretKey;
 
 Create a policy file (`springboot-policy.hcl`) to restrict Spring Boot's access:
 
-```hcl
+```bash
+tee /etc/openbao/policies/auth-app-policy.hcl <<EOF
 # Allow reading database dynamic credentials
 path "database/creds/ngelmak-springboot-role" {
   capabilities = ["read"]
@@ -340,6 +341,7 @@ path "database/creds/ngelmak-springboot-role" {
 path "secret/jjwt/*" {
   capabilities = ["read"]
 }
+EOF
 ```
 
 Apply the policy:
@@ -397,33 +399,96 @@ spring:
 Optimize timestamp-based feed queries to prevent full table scans on large datasets:
 
 ```sql
--- Primary index for feed queries (most important)
-CREATE INDEX idx_post_at ON post (at DESC);
-
--- Optional: Include engagement metrics for combined filtering
-CREATE INDEX idx_post_at_comments ON post (at DESC, comment_count DESC);
-
--- Optional: Index only recent posts to reduce index size
+-- Broader recent index (covers most queries)
 CREATE INDEX idx_post_recent ON post (at DESC) 
-WHERE at >= NOW() - INTERVAL '30 days';
+WHERE at >= NOW() - INTERVAL '6 months';
+
+-- Optional: Only if you frequently query 1+ years back
+CREATE INDEX idx_post_historical ON post (at DESC) 
+WHERE at >= NOW() - INTERVAL '1 year';
 ```
 
 ### Full-Text Search
 
 Enable fast, relevance-ranked search across post content using PostgreSQL's built-in full-text search:
 
+---
+
+Add the tsvector column (normal column, not generated)
 ```sql
+-- Drop column if exists
+ALTER TABLE post DROP COLUMN IF EXISTS textsearchable_index_col;
 -- Add a generated tsvector column for French language search
 ALTER TABLE post
-ADD COLUMN textsearchable_index_col tsvector
-GENERATED ALWAYS AS (
-    setweight(to_tsvector('french', content), 'A') ||
-    setweight(to_tsvector('french', coalesce(keywords, '')), 'D')
-) STORED;
-
--- Create GIN index for fast full-text queries
-CREATE INDEX idx_post_textsearch ON post USING GIN (textsearchable_index_col);
+ADD COLUMN textsearchable_index_col tsvector;
 ```
+
+---
+
+Create the trigger function. This function:
+
+- loads the channel name via a join  
+- updates the tsvector **only if visible = true**  
+- sets the tsvector to `NULL` when the post is not visible (so it won’t match anything)
+
+```sql
+-- Drop function if exists
+DROP FUNCTION IF EXISTS post_tsvector_update();
+-- Create function
+CREATE OR REPLACE FUNCTION post_tsvector_update() 
+RETURNS trigger AS $$
+DECLARE
+    chan_name TEXT;
+BEGIN
+    -- Fetch channel name
+    SELECT name INTO chan_name
+    FROM channel
+    WHERE id = NEW.channel_id;
+
+    -- Only index visible posts
+    IF NEW.visible IS TRUE THEN
+        NEW.textsearchable_index_col :=
+            setweight(to_tsvector('french', NEW.content), 'A') ||
+            setweight(to_tsvector('french', coalesce(NEW.keywords, '')), 'D') ||
+            setweight(to_tsvector('french', coalesce(chan_name, '')), 'B');
+    ELSE
+        NEW.textsearchable_index_col := NULL;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+---
+
+Create the trigger. This trigger fires **only when relevant fields change**:
+
+- `content`
+- `keywords` (optional)
+
+```sql
+-- Drop trigger if exists
+DROP TRIGGER IF EXISTS trg_post_tsvector_update ON post;
+CREATE TRIGGER trg_post_tsvector_update
+BEFORE INSERT OR UPDATE OF content
+ON post
+FOR EACH ROW
+EXECUTE FUNCTION post_tsvector_update();
+```
+
+---
+
+Create the GIN index  
+```sql
+-- Drop index if exists
+DROP INDEX IF EXISTS idx_post_textsearch;
+-- Create index
+CREATE INDEX idx_post_textsearch
+ON post USING GIN (textsearchable_index_col);
+```
+
+---
 
 **Example query:**
 

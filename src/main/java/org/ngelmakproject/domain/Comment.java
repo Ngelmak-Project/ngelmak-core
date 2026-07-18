@@ -3,6 +3,9 @@ package org.ngelmakproject.domain;
 import java.io.Serializable;
 import java.time.Instant;
 
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonIncludeProperties;
 
@@ -37,10 +40,12 @@ public class Comment implements Serializable {
     @Column(name = "id")
     private Long id;
 
+    @CreatedDate
     @NotNull
-    @Column(name = "at", nullable = false)
+    @Column(name = "at", nullable = false, updatable = false)
     private Instant at;
 
+    @LastModifiedDate
     @Column(name = "last_update")
     private Instant lastUpdate;
 
@@ -48,7 +53,7 @@ public class Comment implements Serializable {
     private Instant deletedAt;
 
     @Column(name = "content", length = 5000, nullable = false)
-    @Size(max = 2000)
+    @Size(max = 5000)
     private String content;
 
     @Column(name = "reply_count")

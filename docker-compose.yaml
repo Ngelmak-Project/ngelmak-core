@@ -5,11 +5,10 @@ services:
     container_name: ngelmak-core
     ports:
       - "5742:5742"
-    restart: on-failure:5
     environment:
-      VAULT_ROLE_ID: ${VAULT_ROLE_ID} # Pass the Vault AppRole Role ID as an environment variable
-      VAULT_SECRET_ID: ${VAULT_SECRET_ID} # Pass the Vault AppRole Secret
-      SPRING_PROFILES_ACTIVE: prod # Set the active profile to 'dev' for development, to 'prod' for production.
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
     networks:
       - ngelmak-net
 

@@ -38,7 +38,7 @@ import jakarta.validation.Valid;
  * {@link org.ngelmakproject.domain.Channel}.
  */
 @RestController
-@RequestMapping("/api/channels")
+@RequestMapping("/api/v1/channels")
 public class ChannelResource {
 
     @ResponseStatus(HttpStatus.NOT_FOUND) // Or @ResponseStatus(HttpStatus.NO_CONTENT)

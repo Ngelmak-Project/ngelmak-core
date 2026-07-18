@@ -282,9 +282,9 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			SELECT p.id
 			FROM post p,
 			    websearch_to_tsquery('french', :fullText) AS query
-			WHERE p.status = 'VALIDATED'
+			WHERE p.visible is TRUE
 			    AND p.textsearchable_index_col @@ query
-			ORDER BY ts_racd(p.textsearchable_index_col, query) DESC
+			ORDER BY ts_rank_cd(p.textsearchable_index_col, query) DESC
 			LIMIT :limit OFFSET :offset
 			""", nativeQuery = true)
 	List<Long> searchFullText(

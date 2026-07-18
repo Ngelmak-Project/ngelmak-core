@@ -3,6 +3,8 @@ package org.ngelmakproject.domain;
 import java.io.Serializable;
 import java.time.Instant;
 
+import org.springframework.data.annotation.CreatedDate;
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import jakarta.persistence.Column;
@@ -36,8 +38,9 @@ public class Ticket implements Serializable {
     @Column(name = "id")
     private Long id;
 
+    @CreatedDate
     @NotNull
-    @Column(name = "issued_at", nullable = false)
+    @Column(name = "issued_at", nullable = false, updatable = false)
     private Instant issuedAt = Instant.now();
 
     @Column(name = "resolved")

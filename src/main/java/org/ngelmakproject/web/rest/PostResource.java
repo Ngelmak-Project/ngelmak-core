@@ -39,7 +39,7 @@ import org.springframework.web.multipart.MultipartFile;
  * REST controller for managing {@link org.ngelmakproject.domain.Post}.
  */
 @RestController
-@RequestMapping("/api/posts")
+@RequestMapping("/api/v1/posts")
 public class PostResource {
 
     private static final Logger log = LoggerFactory.getLogger(PostResource.class);

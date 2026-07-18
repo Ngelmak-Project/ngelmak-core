@@ -22,7 +22,7 @@ import jakarta.validation.Valid;
  * REST controller for managing {@link org.ngelmakproject.domain.Reaction}.
  */
 @RestController
-@RequestMapping("/api/reactions")
+@RequestMapping("/api/v1/reactions")
 public class ReactionResource {
 
     private static final Logger log = LoggerFactory.getLogger(ReactionResource.class);

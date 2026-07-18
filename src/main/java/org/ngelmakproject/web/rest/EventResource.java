@@ -22,7 +22,7 @@
 // import org.springframework.web.multipart.MultipartFile;
 
 // @RestController
-// @RequestMapping("/api/events")
+// @RequestMapping("/api/v1/events")
 // public class EventResource {
 
 //     @Autowired

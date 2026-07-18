@@ -3,6 +3,8 @@ package org.ngelmakproject.domain;
 import java.io.Serializable;
 import java.time.LocalDate;
 
+import org.springframework.data.annotation.CreatedDate;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -29,6 +31,7 @@ public class Subscription implements Serializable {
     @Column(name = "id")
     private Long id;
 
+    @CreatedDate
     @Column(name = "subscribed_at", nullable = false, updatable = false)
     private LocalDate subscribedAt = LocalDate.now();
 

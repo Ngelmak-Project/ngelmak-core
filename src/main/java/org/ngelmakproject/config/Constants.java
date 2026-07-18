@@ -13,7 +13,7 @@ public final class Constants {
     public static final String DEFAULT_ATTACHMENT_LOCAL_DIRECTORY = "attachment-repos";
 
     // 10000 chars max for post content.
-    public static final int MAX_POST_LENGTH = 10000;
-    // 2000 chars max for comment content.
-    public static final int MAX_COMMENT_LENGTH = 2000;
+    public static final int MAX_POST_LENGTH = 10_000;
+    // 5000 chars max for comment content.
+    public static final int MAX_COMMENT_LENGTH = 5_000;
 }

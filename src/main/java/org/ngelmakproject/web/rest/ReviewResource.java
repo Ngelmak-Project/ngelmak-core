@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
  * REST controller for managing {@link org.ngelmakproject.domain.Review}.
  */
 @RestController
-@RequestMapping("/api/reviews")
+@RequestMapping("/api/v1/reviews")
 public class ReviewResource {
 
     private static final Logger log = LoggerFactory.getLogger(ReviewResource.class);

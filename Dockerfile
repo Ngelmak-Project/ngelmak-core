@@ -14,8 +14,10 @@ FROM eclipse-temurin:21-jre-alpine AS runner
 
 WORKDIR /ngelmak
 
-COPY --from=builder ./ngelmak/target/ngelmak-core-0.0.1-SNAPSHOT.jar ./ngelmak-core.jar
+USER root
+RUN apk add --no-cache curl
+USER 1000:1000
 
-EXPOSE 5742
+COPY --from=builder /ngelmak/target/ngelmak-core-*.jar ./ngelmakapp.jar
 
-ENTRYPOINT ["java", "-jar", "ngelmak-core.jar"]
+ENTRYPOINT ["java", "-jar", "ngelmakapp.jar"]

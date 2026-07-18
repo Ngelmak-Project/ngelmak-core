@@ -77,24 +77,26 @@ public class CommentService {
 				comment, media.isPresent() ? 1 : 0);
 		// Validate content
 		validateCommentContent(comment.getContent());
-
-		var channel = channelService.findOneByCurrentUser()
-				.orElseThrow(ChannelNotFoundException::new);
-		// Save media (if provided)
-		List<MultipartFile> mediaList = media
-				.map(List::of)
-				.orElse(List.of());
-		List<File> savedFiles = fileService.save(mediaList);
-		// Prepare the comment entity
-		comment.at(Instant.now())
-				.file(savedFiles.stream().findFirst().orElse(null))
-				.channel(channel);
 		// Update counters (post or parent comment)
 		if (comment.getPost() == null && comment.getReplyTo() == null) {
 			throw new BadRequestAlertException(
 					"A comment must refer to either a Post or another Comment.",
 					ENTITY_NAME,
 					"missingPostOrComment");
+		}
+
+		var channel = channelService.findOneByCurrentUser()
+				.orElseThrow(ChannelNotFoundException::new);
+		// Prepare the comment entity
+		comment.at(Instant.now())
+				.channel(channel);
+		// Save media (if provided)
+		if (media.isPresent()) {
+			List<MultipartFile> mediaList = media
+					.map(List::of)
+					.orElse(List.of());
+			List<File> savedFiles = fileService.save(mediaList);
+			comment.setFile(savedFiles.stream().findFirst().orElse(null));
 		}
 		// Save to Redis
 		commentRedisService.queueCreate(comment);
@@ -235,6 +237,7 @@ public class CommentService {
 	 * @param storedReplyCount the number of replies currently stored on the client
 	 * @return a list of CommentDTOs representing the replies
 	 */
+	@Transactional(readOnly = true)
 	public List<CommentDTO> findRepliesByComment(long id, int storedReplyCount) {
 		List<CommentDTO> commentDTOs = commentRepository.findRepliesByComment(id)
 				.stream().map(c -> CommentDTO.from(c)).toList();
