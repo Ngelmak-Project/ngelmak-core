@@ -7,6 +7,11 @@ spring:
     vault:
       uri: http://vault:8200
       authentication: approle
+      config:
+        lifecycle:
+          enabled: true # Enable lease renewal (default)
+          min-renewal: 3600 # Minimum time between renewals (1 hour)
+          expiry-threshold: 7200 # Renew this long before expiration (2 hours)
       fail-fast: true # Enable fail-fast to force confirmation. Spring Boot to crash immediately when Vault/OpenBao is not reachable
       app-role:
         role-id: ${VAULT_ROLE_ID}
@@ -21,11 +26,13 @@ spring:
         application-name: jjwt
         default-context: "" # or omit this entirely
   datasource:
-    hikari.initialization-fail-timeout: 0
-    hikari.max-lifetime: 1800000 # 30 minutes
-    hikari.idleTimeout: 600000 # 10 minutes
-    hikari.maxLifetime: 600000 # 10 minutes
-    hikari.validation-timeout: 5000
+    hikari.initialization-fail-timeout: 0 # Fail immediately if pool can't initialize
+    hikari.max-lifetime: 600000 # Max connection lifetime before closing (10 min)
+    hikari.idle-timeout: 300000 # Close idle connections after 5 minutes
+    hikari.connection-test-query: SELECT 1 # Validation query to test connections
+    hikari.validation-timeout: 5000 # Timeout for validation query (5 seconds)
+    hikari.minimum-idle: 5 # Minimum idle connections to maintain
+    hikari.maximum-pool-size: 20 # Maximum connections in pool
     url: jdbc:postgresql://postgres:5432/ngelmakdb
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
@@ -36,6 +43,7 @@ spring:
       fail-on-empty-beans: false
   data:
     redis:
+      client-type: lettuce
       host: redis
       port: 6379
       timeout: 60000ms
@@ -72,3 +80,5 @@ logging:
   level:
     root: INFO
     "[org.springframework.vault]": DEBUG
+
+# set refresh interval for static secrets
