@@ -79,7 +79,7 @@ public class CommentRedisService {
      */
     public void queueDelete(CommentProjection comment) {
         String value = CacheTools.toJson(comment);
-        redis.opsForHash().put(REDIS_DELETE_KEY, comment.getId().toString(), value);
+        redis.opsForHash().put(REDIS_DELETE_KEY, comment.id().toString(), value);
         log.warn("📦 Redis | Comment deleted - {}", value);
     }
 
@@ -157,16 +157,16 @@ public class CommentRedisService {
                 .map(json -> CacheTools.fromJson(json, CommentProjection.class))
                 .toList();
 
-        Set<Long> toDeleteIds = toDelete.stream().map(CommentProjection::getId).collect(Collectors.toSet());
+        Set<Long> toDeleteIds = toDelete.stream().map(CommentProjection::id).collect(Collectors.toSet());
         Set<Long> replyCommentIds = toDelete.stream()
-                .map(c -> c.getReplyTo().getId())
+                .map(c -> c.replyToId())
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
         commentRepository.softDeleteByIds(toDeleteIds, Instant.now());
         commentRepository.updateReplyCount(replyCommentIds);
         toDelete.stream()
-                .map(c -> c.getPost().getId())
+                .map(c -> c.postId())
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet())
                 .forEach(postRedisService::queueCommmentCount);

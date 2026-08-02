@@ -247,17 +247,19 @@ public class PostService {
         Long actualId = postRedisService.resolvePostId(id);
         log.debug("Resolved Post ID={} to actual ID={}", id, actualId);
 
-        postRepository.findProjectedById(actualId).ifPresentOrElse(projection -> {
-            if (!channel.getId().equals(projection.getChannel().getId())) {
-                log.warn("Unauthorized delete attempt on persisted Post ID={} by User={}", actualId,
-                        channel.getUser());
-                throw new UnauthorizedResourceAccessException(channel.getUser(), actualId, ENTITY_NAME);
-            }
+        PostProjection.from(postRepository.findProjectedById(actualId))
+                .ifPresentOrElse(projection -> {
+                    if (!channel.getId().equals(projection.channelId())) {
+                        log.warn("Unauthorized delete attempt on persisted Post ID={} by User={}",
+                                actualId, channel.getUser());
+                        throw new UnauthorizedResourceAccessException(channel.getUser(), actualId, ENTITY_NAME);
+                    }
 
-            postRedisService.queueDelete(actualId);
-            log.debug("Persisted Post ID={} queued for DELETE operation", actualId);
+                    postRedisService.queueDelete(actualId);
+                    log.debug("Persisted Post ID={} queued for DELETE operation", actualId);
 
-        }, () -> log.debug("No persisted Post found for ID={}", actualId));
+                }, () -> log.debug("No persisted Post found for ID={}", actualId));
+
     }
 
     /**
@@ -443,18 +445,28 @@ public class PostService {
         });
 
         // Bulk fetch reactions for all posts in the feed
-        List<Reaction> reactions = reactionRepository.findByPostIds(postIds);
-        // Group reactions by postId
-        Map<Long, List<Reaction>> reactionsByPost = ReactionService.groupReactionsByPost(reactions);
-        // Map feed entries to DTOs
-        List<PostDTO> feeds = posts.stream().map(post -> {
-            List<Reaction> postReactions = reactionsByPost.getOrDefault(post.getId(), List.of());
-            ReactionSummaryDTO summary = ReactionSummaryDTO.from(postReactions,
-                    optional.map(Channel::getId).orElse(null));
-            return PostDTO.from(post, summary);
-        }).toList();
+        var feeds = filloutReactions(posts, optional.map(Channel::getId).orElse(null));
 
         return new FeedPageDTO<PostDTO>(feeds, null, pageable.getPageNumber(),
+                pageable.getSort().stream()
+                        .map(order -> new SortDTO(order.getProperty(), order.getDirection().name()))
+                        .toList());
+    }
+
+    /**
+     * Fetches recent posts created after the specified timestamp, enriched with
+     * channel information, attached files, and aggregated reaction summaries.
+     * 
+     * @param since    the timestamp after which posts should be retrieved.
+     * @param pageable pagination information for the result set.
+     * @return a FeedPageDTO containing the recent posts and pagination metadata.
+     */
+    @Transactional(readOnly = true)
+    public FeedPageDTO<PostDTO> getRecentPosts(Instant since, Pageable pageable) {
+        List<Post> posts = postRepository.findByRecentAndVisibleTrue(since, pageable).getContent();
+        Optional<Channel> optional = channelService.findOneByCurrentUser();
+        var postDTOs = filloutReactions(posts, optional.map(Channel::getId).orElse(null));
+        return new FeedPageDTO<>(postDTOs, null, pageable.getPageNumber(),
                 pageable.getSort().stream()
                         .map(order -> new SortDTO(order.getProperty(), order.getDirection().name()))
                         .toList());
@@ -618,10 +630,10 @@ public class PostService {
      */
     @Transactional(readOnly = false)
     @Scheduled(cron = "0 0 3 * * *") // every day at 3 AM
-    public void purgeDeletedComments() {
+    public void purgeDeletedPosts() {
         Instant cutoff = Instant.now().minus(7, ChronoUnit.DAYS);
 
-        List<PostProjection> posts = postRepository.findExpiredPosts(cutoff);
+        List<PostProjection> posts = PostProjection.fromRows(postRepository.findExpiredPosts(cutoff));
 
         if (posts.isEmpty()) {
             return;
@@ -629,8 +641,7 @@ public class PostService {
 
         // Extract file IDs
         List<Long> fileIds = posts.stream()
-                .flatMap(p -> p.getFiles().stream())
-                .map(f -> f.getId())
+                .flatMap(p -> p.fileIds().stream())
                 .filter(Objects::nonNull)
                 .toList();
 
@@ -640,7 +651,7 @@ public class PostService {
 
         // Extract post IDs
         List<Long> postIds = posts.stream()
-                .map(PostProjection::getId)
+                .map(PostProjection::id)
                 .toList();
 
         // Hard delete posts

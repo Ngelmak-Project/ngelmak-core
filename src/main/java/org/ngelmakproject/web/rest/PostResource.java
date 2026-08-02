@@ -72,7 +72,8 @@ public class PostResource {
             throws URISyntaxException {
         List<MultipartFile> medias$ = medias.orElse(List.of());
         List<MultipartFile> covers$ = covers.orElse(List.of());
-        log.debug("REST request to save Post : {} + {}x media(s) and {}x cover(s)", post, medias$.size(), covers$.size());
+        log.debug("REST request to save Post : {} + {}x media(s) and {}x cover(s)", post, medias$.size(),
+                covers$.size());
         if (post.getId() != null) {
             throw new BadRequestAlertException("A new post cannot already have an ID", ENTITY_NAME, "idexists");
         }
@@ -146,7 +147,7 @@ public class PostResource {
     }
 
     /**
-     * {@code GET  /feeds?q=} : retrieve the feed of the connected user, with
+     * {@code GET  /feeds?q=&range=} : retrieve the feed of the connected user, with
      * optional search query.
      * Session key is used to identify the feed session, allowing to keep track of
      * the posts already seen by the user, and to provide a consistent feed across
@@ -159,19 +160,43 @@ public class PostResource {
      */
     @GetMapping("/feeds")
     public ResponseEntity<FeedPageDTO<PostDTO>> getFeeds(
-            @RequestParam(value = "q", defaultValue = "") String query,
+            @RequestParam(value = "q", defaultValue = "", required = false) String query,
+            @RequestParam(value = "range", defaultValue = "feed", required = false) String range,
             @RequestParam(required = false) String sessionKey,
             Pageable pageable) {
-        log.debug("REST request to get a page of Feeds : {}, sessionKey={}", query, sessionKey);
 
-        // If no session key provided → generate timestamp
+        log.debug("REST request to get a page of Feeds : q={}, range={}, sessionKey={}", query, range, sessionKey);
+
         if (sessionKey == null) {
             sessionKey = String.valueOf(Instant.now().getEpochSecond());
         }
 
-        // If query is blank, get feed, else search in feed.
-        FeedPageDTO<PostDTO> pageDTO = query.isBlank() ? postService.getFeed(sessionKey, pageable)
-                : postService.searchFullText(query.trim(), pageable);
+        Instant now = Instant.now();
+        String trimmedQuery = query == null ? "" : query.trim();
+        boolean hasQuery = !trimmedQuery.isEmpty();
+
+        FeedPageDTO<PostDTO> pageDTO;
+
+        // If q is present -> always search (as per your rule)
+        if (hasQuery) {
+            pageDTO = postService.searchFullText(trimmedQuery, pageable);
+        } else {
+            String safeView = (range == null || range.isBlank()) ? "feed" : range;
+
+            switch (safeView) {
+                case "week" -> {
+                    Instant since = now.minusSeconds(7L * 24 * 60 * 60);
+                    pageDTO = postService.getRecentPosts(since, pageable);
+                }
+                case "month" -> {
+                    Instant since = now.minusSeconds(30L * 24 * 60 * 60);
+                    pageDTO = postService.getRecentPosts(since, pageable);
+                }
+                default -> {
+                    pageDTO = postService.getFeed(sessionKey, pageable);
+                }
+            }
+        }
 
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.maxAge(60, TimeUnit.SECONDS))

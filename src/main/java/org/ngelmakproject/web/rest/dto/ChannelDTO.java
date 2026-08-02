@@ -15,46 +15,47 @@ public record ChannelDTO(
         Instant createdAt,
         Long userId,
         EngagementStats stats) {
-    public static ChannelDTO from(Channel a) {
-        if (a == null)
+    public static ChannelDTO from(Channel c) {
+        if (c == null)
             return null;
         return new ChannelDTO(
-                a.getId(),
-                a.getIdentifier(),
-                a.getName(),
-                a.getDescription(),
-                a.getAvatar(),
-                a.getBanner(),
-                a.getCreatedAt(),
-                a.getUser(), null);
+                c.getId(),
+                c.getIdentifier(),
+                c.getName(),
+                c.getDescription(),
+                c.getAvatar(),
+                c.getBanner(),
+                c.getCreatedAt(),
+                c.getUser(),
+                EngagementStats.empty(c.getId()));
     }
 
-    public static ChannelDTO from(Channel a, EngagementStats stats) {
-        if (a == null)
+    public static ChannelDTO from(Channel c, EngagementStats stats) {
+        if (c == null)
             return null;
         return new ChannelDTO(
-                a.getId(),
-                a.getIdentifier(),
-                a.getName(),
-                a.getDescription(),
-                a.getAvatar(),
-                a.getBanner(),
-                a.getCreatedAt(),
-                a.getUser(),
+                c.getId(),
+                c.getIdentifier(),
+                c.getName(),
+                c.getDescription(),
+                c.getAvatar(),
+                c.getBanner(),
+                c.getCreatedAt(),
+                c.getUser(),
                 stats);
     }
 
-    public static ChannelDTO from(ChannelProjection a, EngagementStats stats) {
-        if (a == null)
+    public static ChannelDTO from(ChannelProjection c, EngagementStats stats) {
+        if (c == null)
             return null;
         return new ChannelDTO(
-                a.getId(),
-                a.getIdentifier(),
-                a.getName(),
-                a.getDescription(),
-                a.getAvatar(),
-                a.getBanner(),
-                a.getCreatedAt(),
+                c.id(),
+                c.identifier(),
+                c.name(),
+                c.description(),
+                c.avatar(),
+                c.banner(),
+                c.createdAt(),
                 null,
                 stats);
     }

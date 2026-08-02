@@ -1,6 +1,8 @@
 package org.ngelmakproject.web.rest;
 
 import java.net.URISyntaxException;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import org.ngelmakproject.domain.Channel;
 import org.ngelmakproject.domain.Subscription;
@@ -8,6 +10,7 @@ import org.ngelmakproject.service.ChannelService;
 import org.ngelmakproject.web.rest.dto.ChannelDTO;
 import org.ngelmakproject.web.rest.dto.PageDTO;
 import org.ngelmakproject.web.rest.dto.SubscriptionDTO;
+import org.ngelmakproject.web.rest.dto.SubscriptionDetailDTO;
 import org.ngelmakproject.web.rest.errors.BadRequestAlertException;
 import org.ngelmakproject.web.rest.util.HeaderUtil;
 import org.ngelmakproject.web.rest.util.ResponseUtil;
@@ -78,10 +81,7 @@ public class ChannelResource {
             throw new BadRequestAlertException("A new channel cannot already have an ID", ENTITY_NAME, "idexists");
         }
         var newChannel = channelService.save(channel);
-        return ResponseEntity.ok()
-                .headers(HeaderUtil.createEntityCreationAlert(applicationName, ENTITY_NAME,
-                        newChannel.getId().toString()))
-                .body(ChannelDTO.from(newChannel));
+        return ResponseEntity.ok().body(ChannelDTO.from(newChannel));
     }
 
     /**
@@ -106,8 +106,6 @@ public class ChannelResource {
         }
         var newChannel = channelService.update(channel);
         return ResponseEntity.ok()
-                .headers(HeaderUtil.createEntityUpdateAlert(applicationName, ENTITY_NAME,
-                        newChannel.getId().toString()))
                 .body(ChannelDTO.from(newChannel));
     }
 
@@ -218,6 +216,19 @@ public class ChannelResource {
         log.debug("REST request to upload the user's channel banner");
         var updatedChannel = channelService.updateBanner(file);
         return ResponseEntity.ok().body(ChannelDTO.from(updatedChannel));
+    }
+
+    /**
+     * {@code GET /channel/subscriptions} : Get all subscriptions for a
+     * channel.
+     *
+     * @return list of SubscriptionDTOs
+     */
+    @GetMapping("/subscriptions")
+    public ResponseEntity<List<SubscriptionDetailDTO>> getSubscriptions() {
+        log.debug("REST request to get subscriptions for Channel");
+
+        return ResponseEntity.ok().body(channelService.getSubscriptions());
     }
 
     /**

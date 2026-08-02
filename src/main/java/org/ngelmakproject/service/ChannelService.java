@@ -18,6 +18,7 @@ import org.ngelmakproject.service.cache.ChannelRedisService;
 import org.ngelmakproject.web.rest.dto.ActiveChannel;
 import org.ngelmakproject.web.rest.dto.ChannelDTO;
 import org.ngelmakproject.web.rest.dto.SubscriptionDTO;
+import org.ngelmakproject.web.rest.dto.SubscriptionDetailDTO;
 import org.ngelmakproject.web.rest.dto.EngagementStats;
 import org.ngelmakproject.web.rest.errors.ChannelAlreadyExistsException;
 import org.ngelmakproject.web.rest.errors.ChannelNotFoundException;
@@ -211,7 +212,7 @@ public class ChannelService {
     public Optional<ChannelDTO> findOne(Long id) {
         log.debug("Request to get Channel : {}", id);
         return channelRepository.findChannelById(id).map(channel -> {
-            var stats = getSubscriptionStatistics(channel.getId(), channel.getPostCount());
+            var stats = getSubscriptionStatistics(channel.id(), channel.postCount());
             return ChannelDTO.from(channel, stats);
         });
     }
@@ -226,7 +227,7 @@ public class ChannelService {
     public Optional<ChannelDTO> findOneByIdentifier(String identifier) {
         log.debug("Request to get Channel : {}", identifier);
         return channelRepository.findChannelByIdentifier(identifier).map(channel -> {
-            var stats = getSubscriptionStatistics(channel.getId(), channel.getPostCount());
+            var stats = getSubscriptionStatistics(channel.id(), channel.postCount());
             return ChannelDTO.from(channel, stats);
         });
     }
@@ -344,6 +345,29 @@ public class ChannelService {
     }
 
     /**
+     * Retrieves all subscriptions for the current authenticated user's channel.
+     *
+     * <p>
+     * Returns a list of all subscriptions involving the user's channel,
+     * including both incoming subscriptions (followers) and outgoing subscriptions
+     * (following).
+     * </p>
+     *
+     * @return list of SubscriptionDetailDTOs containing full channel details
+     * @throws ChannelNotFoundException if the current user has no associated
+     *                                  channel
+     */
+    public List<SubscriptionDetailDTO> getSubscriptions() {
+        Channel channel = this.findOneByCurrentUser()
+                .orElseThrow(ChannelNotFoundException::new);
+        log.debug("REST request to get all Subscriptions for Channel : {}", channel);
+
+        return subscriptionRepository.findAllByChannelInvolved(channel.getId()).stream()
+                .map(SubscriptionDetailDTO::from)
+                .toList();
+    }
+
+    /**
      * Follows the target channel on behalf of the current user.
      *
      * <p>
@@ -417,13 +441,13 @@ public class ChannelService {
             if (!activeChannel.isEmpty()) {
                 return activeChannel.stream()
                         .map(e -> new ActiveChannel(
-                                e.getId(),
-                                e.getName(),
-                                e.getIdentifier(),
-                                e.getAvatar(),
-                                e.getBanner(),
-                                e.getDescription(),
-                                e.getPostCount()))
+                                e.id(),
+                                e.name(),
+                                e.identifier(),
+                                e.avatar(),
+                                e.banner(),
+                                e.description(),
+                                e.postCount()))
                         .toList();
             }
         }
@@ -445,7 +469,7 @@ public class ChannelService {
      * @throws ChannelNotFoundException if the channel does not exist
      */
     @Transactional(readOnly = true)
-    public EngagementStats getSubscriptionStatistics(Long channelId, Integer postCount) {
+    public EngagementStats getSubscriptionStatistics(Long channelId, Long postCount) {
         log.debug("Request to get Subscriptions : {}", channelId);
 
         // Fetch all subscriptions where this channel appears

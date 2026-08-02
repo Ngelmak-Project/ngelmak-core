@@ -245,12 +245,12 @@ public class FileService {
         }
 
         // Delete from SeaweedFS
-        seaweedFsService.deleteFiles(unusedFiles.stream().map(FileProjection::getInternalUrl).toList())
+        seaweedFsService.deleteFiles(unusedFiles.stream().map(FileProjection::internalUrl).toList())
                 .block(); // Blocking for simplicity; can be optimized with async if needed
 
         // Delete DB entries
         fileRepository.deleteUnusedFiles(
-                unusedFiles.stream().map(FileProjection::getId).toList());
+                unusedFiles.stream().map(FileProjection::id).toList());
     }
 
     /**

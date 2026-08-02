@@ -192,7 +192,7 @@ public class CommentService {
 
 		commentRepository.findProjectedById(id).ifPresent(projection -> {
 			// Authorization check: ensure the comment belongs to the current user
-			if (!channel.getId().equals(projection.getChannel().getId())) {
+			if (!channel.getId().equals(projection.channelId())) {
 				throw new UnauthorizedResourceAccessException(
 						channel.getUser(), id, ENTITY_NAME);
 			}
@@ -279,7 +279,7 @@ public class CommentService {
 
 		// Extract file IDs
 		List<Long> fileIds = comments.stream()
-				.map(c -> c.getFile().getId())
+				.map(c -> c.fileId())
 				.filter(Objects::nonNull)
 				.toList();
 
@@ -289,7 +289,7 @@ public class CommentService {
 
 		// Extract comment IDs
 		List<Long> commentIds = comments.stream()
-				.map(CommentProjection::getId)
+				.map(CommentProjection::id)
 				.toList();
 
 		// Hard delete comments

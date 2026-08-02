@@ -19,6 +19,7 @@ import org.ngelmakproject.repository.projection.PostEngagementProjection;
 import org.ngelmakproject.web.rest.dto.Trending;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.DefaultTypedTuple;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -210,21 +211,33 @@ public class PostRedisService {
     private void updateScores(List<PostEngagementProjection> metrics) {
         Instant now = Instant.now();
 
-        metrics.forEach(p -> {
+        // Prepare a batch of ZSET tuples
+        Set<ZSetOperations.TypedTuple<String>> batch = new HashSet<>();
+
+        for (PostEngagementProjection p : metrics) {
             // --- RECENCY (50%) ---
             double hoursSince = Duration.between(p.getAt(), now).toHours();
             double recency = Math.exp(-(hoursSince / 48.0)) * 0.50;
 
             // --- ENGAGEMENT (30%) ---
-            // SQL: LN(1 + LEAST(comment_count, 100)) / LN(101)
             int cappedComments = (int) Math.min(p.getCommentCount(), 100);
             double engagement = (Math.log(1.0 + cappedComments) / Math.log(101.0)) * 0.30;
 
-            // --- FINAL BASE SCORE ---
-            double baseScore = recency + engagement;
+            // --- FINAL SCORE ---
+            double score = recency + engagement;
+            log.debug("Post {}: final score={}", p.getId(), score);
+            // Add to batch
+            batch.add(new DefaultTypedTuple<>(p.getId().toString(), score));
+        }
 
-            redis.opsForZSet().add(REDIS_FEED_KEY, p.getId().toString(), baseScore);
-        });
+        if (metrics == null || metrics.isEmpty()) {
+            log.warn("No metrics provided to updateScores");
+            return;
+        }
+        // Only call Redis if batch is not empty
+        redis.opsForZSet().add(REDIS_FEED_KEY, batch);
+
+        log.debug("Updated {} post scores in Redis", batch.size());
     }
 
     /**
@@ -381,12 +394,12 @@ public class PostRedisService {
         if (processedKeys.isEmpty()) {
             return;
         }
-        Set<Long> toDelete = new HashSet<>();
+        Set<Long> toDeleteIds = new HashSet<>();
         for (Object key : processedKeys) {
             Long id = Long.valueOf((String) redis.opsForHash().get(REDIS_DELETE_KEY, key));
-            toDelete.add(id);
+            toDeleteIds.add(id);
         }
-        postRepository.deleteAllById(toDelete);
+        postRepository.softDeleteByIds(toDeleteIds, Instant.now());
 
         if (!processedKeys.isEmpty()) {
             redis.opsForHash().delete(REDIS_DELETE_KEY, processedKeys.toArray());

@@ -7,5 +7,5 @@ public record ActiveChannel(
 		String avatar,
 		String banner,
 		String description,
-		Integer postCount) {
+		Long postCount) {
 }
