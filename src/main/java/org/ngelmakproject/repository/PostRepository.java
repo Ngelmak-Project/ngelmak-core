@@ -1,16 +1,13 @@
 package org.ngelmakproject.repository;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-import org.ngelmakproject.domain.Channel;
 import org.ngelmakproject.domain.Post;
-import org.ngelmakproject.repository.projection.CommentProjection;
 import org.ngelmakproject.repository.projection.PostEngagementProjection;
-import org.ngelmakproject.repository.projection.PostProjection;
+import org.ngelmakproject.repository.projection.PostRow;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -18,26 +15,51 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
-
-import jakarta.persistence.PersistenceException;
 
 /**
  * Spring Data JPA repository for the Post entity.
  */
 @SuppressWarnings("unused")
-@Repository
 public interface PostRepository extends JpaRepository<Post, Long> {
-	Optional<PostProjection> findProjectedById(Long id);
-
-	Integer countByChannelId(Long channelId);
+	Long countByChannelId(Long channelId);
 
 	@Modifying
 	@Query("UPDATE Post p SET p.deletedAt = :ts WHERE p.id IN :ids")
-	int softDeleteByIds(List<Long> ids, @Param("ts") Instant ts);
+	int softDeleteByIds(Set<Long> ids, @Param("ts") Instant ts);
 
-	@Query("SELECT p FROM Post p WHERE p.deletedAt < :cutoff")
-	List<PostProjection> findExpiredPosts(Instant cutoff);
+	@Query("""
+			SELECT new org.ngelmakproject.repository.projection.PostRow(
+				p.id AS id,
+				p.at AS at,
+				p.content AS content,
+				p.lastUpdate AS lastUpdate,
+				p.deletedAt AS deletedAt,
+				p.replyTo.id AS replyToId,
+				p.channel.id AS channelId,
+				f.id AS fileId
+			)
+			FROM Post p
+			LEFT JOIN p.files f
+			WHERE p.id = :id AND p.deletedAt IS NULL
+			""")
+	List<PostRow> findProjectedById(Long id);
+
+	@Query("""
+			SELECT new org.ngelmakproject.repository.projection.PostRow(
+			    p.id AS id,
+				p.at AS at,
+				p.content AS content,
+				p.lastUpdate AS lastUpdate,
+				p.deletedAt AS deletedAt,
+				p.replyTo.id AS replyToId,
+				p.channel.id AS channelId,
+				f.id AS fileId
+			)
+			FROM Post p
+			LEFT JOIN p.files f
+			WHERE p.deletedAt < :cutoff AND p.deletedAt IS NOT NULL
+			""")
+	List<PostRow> findExpiredPosts(Instant cutoff);
 
 	/**
 	 * Fetches engagement metrics (comment count + reaction count) for all posts
@@ -119,7 +141,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			LEFT JOIN post r ON r.reply_to_id = p.id
 			LEFT JOIN post_file pf ON pf.post_id = p.id
 			LEFT JOIN file f ON f.id = pf.file_id
-			WHERE p.at >= CAST(:windowStart AS TIMESTAMP)
+			WHERE p.at >= CAST(:windowStart AS TIMESTAMP) AND p.deleted_at IS NULL
 			ORDER BY score DESC
 			LIMIT :limit OFFSET :offset
 			""", nativeQuery = true)
@@ -151,7 +173,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			SELECT p.id
 			FROM post p
 			CROSS JOIN params
-			WHERE p.at >= :windowStart
+			WHERE p.at >= :windowStart AND p.deleted_at IS NULL
 			ORDER BY (
 			        (
 			            (EXTRACT(EPOCH FROM p.at) - params.window_epoch) / 3600.0
@@ -185,7 +207,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	@Query(value = """
 			SELECT p.id
 			FROM post p
-			WHERE p.at >= :windowStart
+			WHERE p.at >= :windowStart AND p.deleted_at IS NULL
 			ORDER BY (
 			        EXTRACT(EPOCH FROM p.at - :windowStart) / 3600.0
 			        * EXP(-(EXTRACT(EPOCH FROM NOW() - p.at) / 86400.0))
@@ -205,7 +227,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	@Query(value = """
 			SELECT p.id
 			FROM post p
-			WHERE p.at >= :windowStart
+			WHERE p.at >= :windowStart AND p.deleted_at IS NULL
 			ORDER BY
 			    -- RECENCY (50%): Exponential decay, 48-hour half-life (older posts fade to ~6%)
 			    EXP(-(EXTRACT(EPOCH FROM :nowValue - p.at) / 3600.0) / 48.0) * 0.50
@@ -249,7 +271,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			SELECT p.id
 			FROM post p
 			CROSS JOIN params
-			WHERE p.at >= :windowStart
+			WHERE p.at >= :windowStart AND p.deleted_at IS NULL
 			ORDER BY (
 			        (
 			            (EXTRACT(EPOCH FROM p.at) - params.window_epoch) / 3600.0
@@ -284,6 +306,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			    websearch_to_tsquery('french', :fullText) AS query
 			WHERE p.visible is TRUE
 			    AND p.textsearchable_index_col @@ query
+			    AND p.deleted_at IS NULL
 			ORDER BY ts_rank_cd(p.textsearchable_index_col, query) DESC
 			LIMIT :limit OFFSET :offset
 			""", nativeQuery = true)
@@ -327,7 +350,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			LEFT JOIN FETCH p.replyTo
 			LEFT JOIN FETCH p.channel
 			LEFT JOIN FETCH p.files
-			WHERE p.channel.id = :channelId
+			WHERE p.channel.id = :channelId AND p.deletedAt IS NULL
 			ORDER BY p.at DESC
 			""")
 	Slice<Post> findByChannel(@Param("channelId") Long channelId, Pageable pageable);
@@ -337,10 +360,24 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			LEFT JOIN FETCH p.replyTo
 			LEFT JOIN FETCH p.channel
 			LEFT JOIN FETCH p.files
-			WHERE p.channel.id = :channelId AND p.visible = true
+			WHERE p.channel.id = :channelId
+				AND p.visible = true
+				AND p.deletedAt IS NULL
 			ORDER BY p.at DESC
 			""")
 	Slice<Post> findByChannelAndVisibleTrue(@Param("channelId") Long channelId, Pageable pageable);
+
+	@Query("""
+			SELECT p FROM Post p
+			LEFT JOIN FETCH p.replyTo
+			LEFT JOIN FETCH p.channel
+			LEFT JOIN FETCH p.files
+			WHERE p.at >= :since
+				AND p.visible = true
+				AND p.deletedAt IS NULL
+			ORDER BY p.at DESC
+			""")
+	Slice<Post> findByRecentAndVisibleTrue(@Param("since") Instant since, Pageable pageable);
 
 	/**
 	 * Fetches the top 5 trending posts from the specified date, ranked by
@@ -359,7 +396,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			SELECT p.id
 			FROM Post p
 			LEFT JOIN Reaction r ON r.post.id = p.id
-			WHERE p.at >= :since
+			WHERE p.at >= :since AND p.deletedAt IS NULL
 			GROUP BY p.id
 			ORDER BY (p.commentCount * 2.0 + COUNT(r) + CAST(DATEDIFF(SECOND, p.at, CURRENT_TIMESTAMP) AS DOUBLE) * 0.5 / 3600.0) DESC
 			""")
@@ -381,7 +418,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			SELECT p.id
 			FROM Post p
 			LEFT JOIN Reaction r ON r.post.id = p.id
-			WHERE p.at >= :since
+			WHERE p.at >= :since AND p.deletedAt IS NULL
 			GROUP BY p.id
 			ORDER BY (p.commentCount * 2.0 + COUNT(r)) DESC, p.at DESC
 			""")

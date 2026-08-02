@@ -8,13 +8,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 /**
  * Spring Data JPA repository for the Feed entity.
  */
 @SuppressWarnings("unused")
-@Repository
 public interface FeedRepository extends JpaRepository<Feed, Long> {
   Slice<Feed> findByFeedOwnerIn(List<Channel> feedOwners, Pageable pageable);
 

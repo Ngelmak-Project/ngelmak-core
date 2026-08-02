@@ -9,17 +9,14 @@ import org.ngelmakproject.domain.Comment;
 import org.ngelmakproject.repository.projection.CommentProjection;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
-import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 /**
  * Spring Data JPA repository for the Comment entity.
  */
-@Repository
 @SuppressWarnings("unused")
 public interface CommentRepository extends JpaRepository<Comment, Long> {
 	/**
@@ -35,7 +32,9 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 			LEFT JOIN FETCH c.post
 			LEFT JOIN FETCH c.channel
 			LEFT JOIN FETCH c.file
-			WHERE c.post.id = :postId AND c.replyTo IS NULL AND c.deletedAt IS NULL
+			WHERE c.post.id = :postId
+				AND c.replyTo IS NULL
+				AND c.deletedAt IS NULL
 			ORDER BY c.at DESC
 			""")
 	Slice<Comment> findTopLevelCommentsByPost(@Param("postId") Long postId, Pageable pageable);
@@ -232,7 +231,22 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 	 *               expired
 	 * @return a list of comment projections for expired comments
 	 */
-	@Query("SELECT c FROM Comment c WHERE c.deletedAt < :cutoff")
+	@Query("""
+			SELECT new org.ngelmakproject.repository.projection.CommentProjection(
+			    c.id AS id,
+				c.at AS at,
+				c.content AS content,
+				c.replyCount AS replyCount,
+				c.lastUpdate AS lastUpdate,
+				c.deletedAt AS deletedAt,
+				c.post.id AS postId,
+				c.replyTo.id AS replyToId,
+				c.channel.id AS channelId,
+				c.file.id AS fileId
+			)
+			FROM Comment c
+			WHERE c.deletedAt < :cutoff
+			""")
 	List<CommentProjection> findExpiredComments(Instant cutoff);
 
 	/**

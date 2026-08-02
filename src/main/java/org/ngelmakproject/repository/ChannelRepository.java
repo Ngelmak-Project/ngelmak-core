@@ -11,12 +11,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 /**
  * Spring Data JPA repository for the Channel entity.
  */
-@Repository
 @SuppressWarnings("unused")
 public interface ChannelRepository extends JpaRepository<Channel, Long> {
 	Optional<Channel> findOneByUser(Long id);
@@ -34,14 +32,16 @@ public interface ChannelRepository extends JpaRepository<Channel, Long> {
 	 * Also returns the total number of posts for that channel.
 	 */
 	@Query("""
-			SELECT c.id AS id,
-					c.name AS name,
-					c.identifier AS identifier,
-					c.avatar AS avatar,
-					c.banner AS banner,
-					c.description AS description,
-					c.createdAt AS createdAt,
-					(SELECT COUNT(p.id) FROM Post p WHERE p.channel.id = c.id) AS postCount
+			SELECT new org.ngelmakproject.repository.projection.ChannelProjection(
+				c.id AS id,
+				c.name AS name,
+				c.identifier AS identifier,
+				c.avatar AS avatar,
+				c.banner AS banner,
+				c.description AS description,
+				c.createdAt AS createdAt,
+				(SELECT COUNT(p.id) FROM Post p WHERE p.channel.id = c.id) AS postCount
+			)
 			FROM Channel c
 			WHERE c.id = :id
 			""")
@@ -52,14 +52,16 @@ public interface ChannelRepository extends JpaRepository<Channel, Long> {
 	 * Also returns the total number of posts for that channel.
 	 */
 	@Query("""
-			SELECT c.id AS id,
-					c.name AS name,
-					c.identifier AS identifier,
-					c.avatar AS avatar,
-					c.banner AS banner,
-					c.description AS description,
-					c.createdAt AS createdAt,
-					(SELECT COUNT(p.id) FROM Post p WHERE p.channel.id = c.id) AS postCount
+			SELECT new org.ngelmakproject.repository.projection.ChannelProjection(
+				c.id AS id,
+				c.name AS name,
+				c.identifier AS identifier,
+				c.avatar AS avatar,
+				c.banner AS banner,
+				c.description AS description,
+				c.createdAt AS createdAt,
+				(SELECT COUNT(p.id) FROM Post p WHERE p.channel.id = c.id) AS postCount
+			)
 			FROM Channel c
 			WHERE c.identifier = :identifier
 			""")
@@ -80,17 +82,22 @@ public interface ChannelRepository extends JpaRepository<Channel, Long> {
 	 *         count. Returns an empty list if no channels exist.
 	 */
 	@Query("""
-			SELECT c.id AS id,
-			        c.name AS name,
-			        c.identifier AS identifier,
-			        c.avatar AS avatar,
-			        c.banner AS banner,
-			        c.description AS description,
-			        COUNT(p.id) AS postCount
+			SELECT new org.ngelmakproject.repository.projection.ChannelProjection(
+				c.id AS id,
+				c.name AS name,
+				c.identifier AS identifier,
+				c.avatar AS avatar,
+				c.banner AS banner,
+				c.description AS description,
+				c.createdAt AS createdAt,
+				COUNT(p.id) AS postCount
+			)
 			FROM Channel c
 			LEFT JOIN Post p
 			ON p.channel.id = c.id AND p.at >= :since
-			GROUP BY c.id
+			GROUP BY
+				c.id, c.name, c.identifier, c.avatar,
+				c.banner, c.description, c.createdAt
 			HAVING COUNT(p.id) > 0
 			ORDER BY COUNT(p.id) DESC, c.createdAt ASC
 			""")
