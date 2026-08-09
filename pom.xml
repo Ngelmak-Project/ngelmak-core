@@ -11,7 +11,7 @@
 	</parent>
 	<groupId>org.open</groupId>
 	<artifactId>ngelmak-core</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>1.0.2-SNAPSHOT</version>
 	<name>Ngelmak Core</name>
 	<description>Primary service for information exchange.</description>
 	<url />
