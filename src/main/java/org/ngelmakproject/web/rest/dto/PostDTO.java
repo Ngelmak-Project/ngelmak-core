@@ -11,7 +11,7 @@ public record PostDTO(
         String content,
         Instant at,
         Instant lastUpdate,
-        Boolean visibility,
+        Boolean visible,
         ChannelDTO channel,
         Set<FileDTO> files,
         ReactionSummaryDTO reactions,

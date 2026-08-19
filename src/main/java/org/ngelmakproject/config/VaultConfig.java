@@ -1,15 +1,21 @@
 package org.ngelmakproject.config;
 
+import java.time.Duration;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
+
 import javax.sql.DataSource;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.event.EventListener;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import org.springframework.vault.core.lease.SecretLeaseContainer;
@@ -45,7 +51,7 @@ import com.zaxxer.hikari.HikariDataSource;
 public class VaultConfig {
 
 	private static final Logger log = LoggerFactory.getLogger(VaultConfig.class);
-	private static final long ROTATION_THRESHOLD_SECONDS = 1800; // 30 minutes
+	private static final long ROTATION_THRESHOLD_SECONDS = Duration.ofHours(1).toSeconds();
 
 	private final Environment env;
 	private final String jwtSecretKey;
@@ -97,7 +103,7 @@ public class VaultConfig {
 				.password(properties.getPassword())
 				.build();
 
-		log.info(
+		log.debug(
 				"DataSource rebuilt: urlPresent={}, usernamePresent={}, username={}",
 				properties.getUrl() != null,
 				properties.getUsername() != null,
@@ -129,30 +135,47 @@ public class VaultConfig {
 	@Bean
 	public Object vaultDbRotationListener(SecretLeaseContainer leaseContainer, ApplicationContext context) {
 		final String leasePath = "database/creds/" + vaultDbRole;
-
 		log.debug("Vault DB rotation listener initialized for path '{}'.", leasePath);
 
+		// Track the currently active lease ID
+		final AtomicReference<String> revokedActiveLeaseId = new AtomicReference<>(null);
+
 		leaseContainer.addLeaseListener(event -> {
+			// Only handle events for our DB role path
 			if (!event.getSource().getPath().equals(leasePath)) {
 				return;
 			}
-			log.debug("Vault lease event received: type={}, mode={}",
+
+			String eventLeaseId = event.getLease() != null ? event.getLease().getLeaseId() : null;
+
+			log.debug("Vault lease event received: type={}, mode={}, leaseId={}",
 					event.getClass().getSimpleName(),
-					event.getSource().getMode());
+					event.getSource().getMode(),
+					eventLeaseId);
 
 			switch (event) {
-				// Check TTL on each renewal and rotate if needed
+				// Lease renewed (normal mode)
 				case AfterSecretLeaseRenewedEvent e -> {
+					if (Objects.equals(eventLeaseId, revokedActiveLeaseId.get())) {
+						log.debug("Ignoring renewal for old leaseId={}", eventLeaseId);
+						return;
+					}
+
 					long ttlSeconds = e.getLease().getLeaseDuration().getSeconds();
 					log.debug("Lease renewed, TTL: {} seconds", ttlSeconds);
 
+					// Early rotation trigger
 					if (ttlSeconds < ROTATION_THRESHOLD_SECONDS) {
-						log.warn("TTL {} seconds is below threshold of {} seconds, initiating credential rotation",
+						log.debug("TTL {} seconds is below threshold {}, initiating early rotation",
 								ttlSeconds, ROTATION_THRESHOLD_SECONDS);
+
+						// Update active lease ID to the NEW lease
+						revokedActiveLeaseId.set(eventLeaseId);
+						log.debug("Recore lease to revoke leaseId={} activated", eventLeaseId);
 						leaseContainer.requestRotatingSecret(leasePath);
 					}
 				}
-				// Apply rotated credentials to the datasource
+				// New credentials created (ROTATE mode)
 				case SecretLeaseCreatedEvent e when e.getSource().getMode() == RequestedSecret.Mode.ROTATE -> {
 					String username = (String) e.getSecrets().get("username");
 					String password = (String) e.getSecrets().get("password");
@@ -171,17 +194,24 @@ public class VaultConfig {
 
 					log.debug("HikariDataSource updated, existing connections evicted");
 				}
-				// Handle lease expiration fallback
+				// Lease expired (only act if it's the active lease)
 				case SecretLeaseExpiredEvent e -> {
-					log.warn("Lease expired, requesting credential rotation");
+					if (Objects.equals(eventLeaseId, revokedActiveLeaseId.get())) {
+						log.debug("Ignoring expiration for old leaseId={}", eventLeaseId);
+						return;
+					}
+
+					log.warn("Active lease expired, requesting credential rotation");
 					leaseContainer.requestRotatingSecret(leasePath);
 				}
-				// Handle errors
+				// Vault error
 				case SecretLeaseErrorEvent e -> {
 					log.error("Vault error: {}", e.getException().getMessage(), e.getException());
 				}
+
 				default -> {
-				} // No action for other event types
+					// No action for other event types
+				}
 			}
 		});
 
@@ -196,6 +226,7 @@ public class VaultConfig {
 	 * profiles,
 	 * enabled backends, and resolved secret paths.
 	 */
+	@EventListener(ApplicationReadyEvent.class)
 	public void ready() {
 		String profile = String.join(",", env.getActiveProfiles());
 

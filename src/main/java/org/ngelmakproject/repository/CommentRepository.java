@@ -9,6 +9,7 @@ import org.ngelmakproject.domain.Comment;
 import org.ngelmakproject.repository.projection.CommentProjection;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -19,6 +20,16 @@ import org.springframework.data.repository.query.Param;
  */
 @SuppressWarnings("unused")
 public interface CommentRepository extends JpaRepository<Comment, Long> {
+
+	/**
+	 * Fetches comments by IDs with all relationships eagerly loaded.
+	 * 
+	 * @param ids the comment IDs to fetch
+	 * @return list of comments with relationships
+	 */
+	@EntityGraph(attributePaths = { "post", "channel", "file" })
+	List<Comment> findAllByIdIn(@Param("ids") List<Long> ids);
+
 	/**
 	 * Finds top-level comments for a given post, ordered by creation time in
 	 * descending order.
@@ -28,16 +39,13 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 	 * @return the slice of top-level comments
 	 */
 	@Query("""
-			SELECT c FROM Comment c
-			LEFT JOIN FETCH c.post
-			LEFT JOIN FETCH c.channel
-			LEFT JOIN FETCH c.file
+			SELECT c.id FROM Comment c
 			WHERE c.post.id = :postId
-				AND c.replyTo IS NULL
-				AND c.deletedAt IS NULL
+			    AND c.replyTo IS NULL
+			    AND c.deletedAt IS NULL
 			ORDER BY c.at DESC
 			""")
-	Slice<Comment> findTopLevelCommentsByPost(@Param("postId") Long postId, Pageable pageable);
+	Slice<Long> findIdsByTopLevelCommentsForPost(@Param("postId") Long postId, Pageable pageable);
 
 	/**
 	 * Finds top-level comments for a given channel, ordered by creation time in
@@ -48,14 +56,11 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 	 * @return the slice of top-level comments
 	 */
 	@Query("""
-			SELECT c FROM Comment c
-			LEFT JOIN FETCH c.post
-			LEFT JOIN FETCH c.channel
-			LEFT JOIN FETCH c.file
+			SELECT c.id FROM Comment c
 			WHERE c.channel.id = :channelId AND c.deletedAt IS NULL
 			ORDER BY c.at DESC
 			""")
-	Slice<Comment> findCommentsByChannelOrByAtDesc(@Param("channelId") Long channelId, Pageable pageable);
+	Slice<Long> findIdsByChannelOrByAtDesc(@Param("channelId") Long channelId, Pageable pageable);
 
 	/**
 	 * Finds replies to a specific comment, ordered by creation time in ascending

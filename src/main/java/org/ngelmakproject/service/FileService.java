@@ -237,7 +237,7 @@ public class FileService {
     @Scheduled(cron = "0 0 3 * * *")
     @Transactional
     public void cleanupUnusedFiles() {
-        log.warn("Launching the cleanup schedule for unused files");
+        log.debug("Launching the cleanup schedule for unused files");
 
         List<FileProjection> unusedFiles = fileRepository.findUnusedFiles();
         if (unusedFiles.isEmpty()) {

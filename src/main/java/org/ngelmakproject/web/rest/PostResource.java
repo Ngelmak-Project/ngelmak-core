@@ -161,10 +161,9 @@ public class PostResource {
     @GetMapping("/feeds")
     public ResponseEntity<FeedPageDTO<PostDTO>> getFeeds(
             @RequestParam(value = "q", defaultValue = "", required = false) String query,
-            @RequestParam(value = "range", defaultValue = "feed", required = false) String range,
+            @RequestParam(defaultValue = "feed", required = false) String range,
             @RequestParam(required = false) String sessionKey,
             Pageable pageable) {
-
         log.debug("REST request to get a page of Feeds : q={}, range={}, sessionKey={}", query, range, sessionKey);
 
         if (sessionKey == null) {

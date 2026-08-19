@@ -2,7 +2,6 @@ package org.ngelmakproject.web.rest;
 
 import java.net.URISyntaxException;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import org.ngelmakproject.domain.Channel;
 import org.ngelmakproject.domain.Subscription;

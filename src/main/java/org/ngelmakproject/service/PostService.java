@@ -278,7 +278,8 @@ public class PostService {
         Channel channel = channelService.findOneByCurrentUser().orElseThrow(ChannelNotFoundException::new);
 
         // Get posts from database
-        List<Post> posts = this.postRepository.findByChannel(channel.getId(), pageable).getContent();
+        List<Post> posts = this.postRepository.findAllByIdIn(
+                this.postRepository.findIdsByChannel(channel.getId(), pageable).getContent());
 
         // Get pending created posts from Redis for this channel
         List<Post> pendingPosts = postRedisService.getPendingPostsByChannel(channel.getId());
@@ -306,9 +307,8 @@ public class PostService {
     @Transactional(readOnly = true)
     public PageDTO<PostDTO> getPostByChannel(Long channelId, Pageable pageable) {
         // 1. Fetch post entries with channels, and files
-        List<Post> posts = this.postRepository.findByChannelAndVisibleTrue(
-                channelId,
-                pageable).getContent();
+        List<Post> posts = this.postRepository.findAllByIdIn(
+                this.postRepository.findIdsByChannelAndVisibleTrue(channelId, pageable).getContent());
         var postDTOs = filloutReactions(posts, channelId);
         Page<PostDTO> page = new PageImpl<>(postDTOs, pageable, postDTOs.size());
         return PageDTO.from(page);
@@ -463,7 +463,8 @@ public class PostService {
      */
     @Transactional(readOnly = true)
     public FeedPageDTO<PostDTO> getRecentPosts(Instant since, Pageable pageable) {
-        List<Post> posts = postRepository.findByRecentAndVisibleTrue(since, pageable).getContent();
+        List<Post> posts = postRepository
+                .findAllByIdIn(postRepository.findIdsByRecentAndVisibleTrue(since, pageable).getContent());
         Optional<Channel> optional = channelService.findOneByCurrentUser();
         var postDTOs = filloutReactions(posts, optional.map(Channel::getId).orElse(null));
         return new FeedPageDTO<>(postDTOs, null, pageable.getPageNumber(),

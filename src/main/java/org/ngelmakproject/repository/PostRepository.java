@@ -346,38 +346,30 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	List<Post> findByAtAfter(@Param("since") Instant since);
 
 	@Query("""
-			SELECT p FROM Post p
-			LEFT JOIN FETCH p.replyTo
-			LEFT JOIN FETCH p.channel
-			LEFT JOIN FETCH p.files
-			WHERE p.channel.id = :channelId AND p.deletedAt IS NULL
-			ORDER BY p.at DESC
-			""")
-	Slice<Post> findByChannel(@Param("channelId") Long channelId, Pageable pageable);
-
-	@Query("""
-			SELECT p FROM Post p
-			LEFT JOIN FETCH p.replyTo
-			LEFT JOIN FETCH p.channel
-			LEFT JOIN FETCH p.files
+			SELECT p.id FROM Post p
 			WHERE p.channel.id = :channelId
-				AND p.visible = true
-				AND p.deletedAt IS NULL
+			    AND p.deletedAt IS NULL
 			ORDER BY p.at DESC
 			""")
-	Slice<Post> findByChannelAndVisibleTrue(@Param("channelId") Long channelId, Pageable pageable);
+	Slice<Long> findIdsByChannel(@Param("channelId") Long channelId, Pageable pageable);
 
 	@Query("""
-			SELECT p FROM Post p
-			LEFT JOIN FETCH p.replyTo
-			LEFT JOIN FETCH p.channel
-			LEFT JOIN FETCH p.files
-			WHERE p.at >= :since
-				AND p.visible = true
-				AND p.deletedAt IS NULL
+			SELECT p.id FROM Post p
+			WHERE p.channel.id = :channelId
+			    AND p.visible = true
+			    AND p.deletedAt IS NULL
 			ORDER BY p.at DESC
 			""")
-	Slice<Post> findByRecentAndVisibleTrue(@Param("since") Instant since, Pageable pageable);
+	Slice<Long> findIdsByChannelAndVisibleTrue(@Param("channelId") Long channelId, Pageable pageable);
+
+	@Query("""
+			SELECT p.id FROM Post p
+			WHERE p.at >= :since
+			    AND p.visible = true
+			    AND p.deletedAt IS NULL
+			ORDER BY p.at DESC
+			""")
+	Slice<Long> findIdsByRecentAndVisibleTrue(@Param("since") Instant since, Pageable pageable);
 
 	/**
 	 * Fetches the top 5 trending posts from the specified date, ranked by

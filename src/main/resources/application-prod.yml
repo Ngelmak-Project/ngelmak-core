@@ -26,15 +26,15 @@ spring:
         application-name: jjwt
         default-context: "" # or omit this entirely
   datasource:
-    hikari.initialization-fail-timeout: 0 # Fail immediately if pool can't initialize
-    hikari.max-lifetime: 2400000 # Max connection lifetime before closing (40 min, well before 1h lease expiration)
-    hikari.idle-timeout: 300000 # Close idle connections after 5 minutes
-    hikari.connection-timeout: 30000
-    hikari.connection-test-query: SELECT 1 # Validation query to test connections
-    hikari.validation-timeout: 5000 # Timeout for validation query (5 seconds)
-    hikari.minimum-idle: 5 # Minimum idle connections to maintain
-    hikari.maximum-pool-size: 20 # Maximum connections in pool
-    hikari.leak-detection-threshold: 60000
+    hikari.initialization-fail-timeout: 0
+    hikari.max-lifetime: 600000 # 10 min (must be < 1h TTL)
+    hikari.idle-timeout: 300000 # 5 min
+    hikari.connection-timeout: 30000 # 30 sec
+    hikari.connection-test-query: SELECT 1
+    hikari.validation-timeout: 5000
+    hikari.minimum-idle: 5
+    hikari.maximum-pool-size: 10 # must be <= Vault max_leases
+    hikari.leak-detection-threshold: 2000
     url: jdbc:postgresql://postgres:5432/ngelmakdb
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
@@ -81,6 +81,7 @@ debug: false
 logging:
   level:
     root: INFO
+    org.hibernate.orm.query: WARN
     "[com.zaxxer.hikari]": ERROR
     "[com.zaxxer.hikari.HikariPool]": ERROR
     "[com.zaxxer.hikari.pool.PoolBase]": ERROR
